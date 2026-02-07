@@ -29,7 +29,7 @@ const DEFAULT_SETTINGS: ExtensionSettingsV2 = {
         "User input:\n{{input}}\n\n" +
         "Response:",
       secretMode: false,
-      keyboardShortcut: "",
+      keyboardShortcut: "cmd+shift+p",
     },
   ],
 };
@@ -381,11 +381,11 @@ export default function OptionsApp() {
         {hasOpenRouterKey ? (
           <>
             {missingPlaceholderPrompts.length ? (
-          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-slate-900">
-            {missingPlaceholderPrompts.length} prompt
-            {missingPlaceholderPrompts.length === 1 ? "" : "s"} missing{" "}
-            <code>{TEMPLATE_PLACEHOLDER}</code>.
-          </div>
+              <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-slate-900">
+                {missingPlaceholderPrompts.length} prompt
+                {missingPlaceholderPrompts.length === 1 ? "" : "s"} missing{" "}
+                <code>{TEMPLATE_PLACEHOLDER}</code>.
+              </div>
             ) : null}
 
             <div className="flex flex-col gap-4">
@@ -394,133 +394,138 @@ export default function OptionsApp() {
                   key={prompt.id}
                   className="rounded-xl border border-slate-200 bg-white p-4"
                 >
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="font-bold text-slate-900">Prompt {idx + 1}</div>
-                <button
-                  type="button"
-                  className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => removePrompt(prompt.id)}
-                  disabled={settings.prompts.length <= 1}
-                  title={
-                    settings.prompts.length <= 1
-                      ? "Keep at least one prompt"
-                      : "Remove prompt"
-                  }
-                >
-                  Remove
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 mb-4">
-                <div>
-                  <label
-                    className="mb-2 block text-sm font-semibold text-slate-900"
-                    htmlFor={`model-${prompt.id}`}
-                  >
-                    Model (OpenRouter)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      id={`model-${prompt.id}`}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      type="text"
-                      list="openrouter-models"
-                      placeholder="e.g. openai/gpt-4o-mini"
-                      value={prompt.model}
-                      onChange={(e) =>
-                        updatePrompt(prompt.id, { model: e.target.value })
-                      }
-                    />
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="font-bold text-slate-900">
+                      Prompt {idx + 1}
+                    </div>
                     <button
                       type="button"
-                      className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50"
-                      onClick={() => void loadModels(settings.openRouterApiKey)}
-                      disabled={modelsLoading || !hasOpenRouterKey}
-                      title="Refresh model list"
+                      className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => removePrompt(prompt.id)}
+                      disabled={settings.prompts.length <= 1}
+                      title={
+                        settings.prompts.length <= 1
+                          ? "Keep at least one prompt"
+                          : "Remove prompt"
+                      }
                     >
-                      {modelsLoading ? "…" : "Refresh"}
+                      Remove
                     </button>
                   </div>
-                  {models.length ? (
-                    <div className="mt-2 text-xs text-slate-600">
-                      Tip: start typing to filter, then pick from the list.
+
+                  <div className="grid grid-cols-1 gap-4 mb-4">
+                    <div>
+                      <label
+                        className="mb-2 block text-sm font-semibold text-slate-900"
+                        htmlFor={`model-${prompt.id}`}
+                      >
+                        Model (OpenRouter)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={`model-${prompt.id}`}
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          type="text"
+                          list="openrouter-models"
+                          placeholder="e.g. openai/gpt-4o-mini"
+                          value={prompt.model}
+                          onChange={(e) =>
+                            updatePrompt(prompt.id, { model: e.target.value })
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50"
+                          onClick={() =>
+                            void loadModels(settings.openRouterApiKey)
+                          }
+                          disabled={modelsLoading || !hasOpenRouterKey}
+                          title="Refresh model list"
+                        >
+                          {modelsLoading ? "…" : "Refresh"}
+                        </button>
+                      </div>
+                      {models.length ? (
+                        <div className="mt-2 text-xs text-slate-600">
+                          Tip: start typing to filter, then pick from the list.
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
 
-                <div>
-                  <label
-                    className="mb-2 block text-sm font-semibold text-slate-900"
-                    htmlFor={`shortcut-${prompt.id}`}
-                  >
-                    Keyboard shortcut
-                  </label>
-                  <input
-                    id={`shortcut-${prompt.id}`}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    type="text"
-                    placeholder='e.g. "Ctrl+Shift+P" or "Alt+K"'
-                    value={prompt.keyboardShortcut}
-                    onChange={(e) =>
-                      updatePrompt(prompt.id, {
-                        keyboardShortcut: e.target.value,
-                      })
-                    }
-                  />
-                  <div className="mt-2 text-xs text-slate-600">
-                    Stored as a setting for the extension to interpret. (Chrome
-                    <code>commands</code> shortcuts must be declared in{" "}
-                    <code>manifest.json</code>.)
+                    <div>
+                      <label
+                        className="mb-2 block text-sm font-semibold text-slate-900"
+                        htmlFor={`shortcut-${prompt.id}`}
+                      >
+                        Keyboard shortcut
+                      </label>
+                      <input
+                        id={`shortcut-${prompt.id}`}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        type="text"
+                        placeholder='e.g. "Ctrl+Shift+P" or "Alt+K"'
+                        value={prompt.keyboardShortcut}
+                        onChange={(e) =>
+                          updatePrompt(prompt.id, {
+                            keyboardShortcut: e.target.value,
+                          })
+                        }
+                      />
+                      <div className="mt-2 text-xs text-slate-600">
+                        Stored as a setting for the extension to interpret.
+                        (Chrome
+                        <code>commands</code> shortcuts must be declared in{" "}
+                        <code>manifest.json</code>.)
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          id={`secret-${prompt.id}`}
+                          type="checkbox"
+                          checked={prompt.secretMode}
+                          onChange={(e) =>
+                            updatePrompt(prompt.id, {
+                              secretMode: e.target.checked,
+                            })
+                          }
+                        />
+                        <label
+                          className="text-sm font-semibold text-slate-900"
+                          htmlFor={`secret-${prompt.id}`}
+                        >
+                          Secret Mode
+                        </label>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-600">
+                        When enabled, you can treat this prompt as sensitive
+                        (e.g. don’t log inputs / don’t show history).
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      id={`secret-${prompt.id}`}
-                      type="checkbox"
-                      checked={prompt.secretMode}
+                  <div>
+                    <label
+                      className="mb-2 block text-sm font-semibold text-slate-900"
+                      htmlFor={`template-${prompt.id}`}
+                    >
+                      Prompt template
+                    </label>
+                    <textarea
+                      id={`template-${prompt.id}`}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows={10}
+                      value={prompt.template}
                       onChange={(e) =>
-                        updatePrompt(prompt.id, {
-                          secretMode: e.target.checked,
-                        })
+                        updatePrompt(prompt.id, { template: e.target.value })
                       }
                     />
-                    <label
-                      className="text-sm font-semibold text-slate-900"
-                      htmlFor={`secret-${prompt.id}`}
-                    >
-                      Secret Mode
-                    </label>
+                    <div className="mt-2 text-xs text-slate-600">
+                      Include <code>{TEMPLATE_PLACEHOLDER}</code> where the
+                      extra text should go.
+                    </div>
                   </div>
-                  <div className="mt-2 text-xs text-slate-600">
-                    When enabled, you can treat this prompt as sensitive (e.g.
-                    don’t log inputs / don’t show history).
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label
-                  className="mb-2 block text-sm font-semibold text-slate-900"
-                  htmlFor={`template-${prompt.id}`}
-                >
-                  Prompt template
-                </label>
-                <textarea
-                  id={`template-${prompt.id}`}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={10}
-                  value={prompt.template}
-                  onChange={(e) =>
-                    updatePrompt(prompt.id, { template: e.target.value })
-                  }
-                />
-                <div className="mt-2 text-xs text-slate-600">
-                  Include <code>{TEMPLATE_PLACEHOLDER}</code> where the extra
-                  text should go.
-                </div>
-              </div>
                 </div>
               ))}
             </div>
