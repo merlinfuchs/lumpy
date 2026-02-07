@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { OpenRouter } from "@openrouter/sdk";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
 export interface PromptConfig {
   id: string;
@@ -42,6 +43,111 @@ type OpenRouterModel = {
   context_length?: number;
   description?: string;
 };
+
+type RagDocument = {
+  id: string;
+  name: string;
+  createdAt: number;
+  pageCount: number;
+  byteSize: number;
+  embeddingModel: string;
+  chunkCount: number;
+};
+
+type RagListDocsResponse =
+  | { ok: true; documents: RagDocument[] }
+  | { ok: false; error: string };
+
+type RagDeleteDocResponse = { ok: true } | { ok: false; error: string };
+
+type RagIndexResponse =
+  | { ok: true; docId: string; chunkCount: number }
+  | { ok: false; error: string };
+
+function sendMessage<TResponse>(message: unknown): Promise<TResponse> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) =>
+      resolve(response as TResponse)
+    );
+  });
+}
+
+function bytesToHex(bytes: ArrayBuffer): string {
+  const u8 = new Uint8Array(bytes);
+  let out = "";
+  for (let i = 0; i < u8.length; i++) out += u8[i].toString(16).padStart(2, "0");
+  return out;
+}
+
+async function sha256Hex(data: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return bytesToHex(digest);
+}
+
+type PageText = { page: number; text: string };
+
+async function extractPdfText(
+  file: File
+): Promise<{ pages: PageText[]; pageCount: number }> {
+  // Configure pdf.js worker to the file we copy into dist/js/.
+  (pdfjs as any).GlobalWorkerOptions.workerSrc = chrome.runtime.getURL(
+    "js/pdf.worker.min.mjs"
+  );
+
+  const buf = await file.arrayBuffer();
+  const loadingTask = (pdfjs as any).getDocument({ data: new Uint8Array(buf) });
+  const pdf = await loadingTask.promise;
+  const pageCount: number = pdf.numPages;
+
+  const pages: PageText[] = [];
+  for (let p = 1; p <= pageCount; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const text = (tc.items as any[])
+      .map((it) => (typeof it?.str === "string" ? it.str : ""))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    pages.push({ page: p, text });
+  }
+
+  return { pages, pageCount };
+}
+
+function chunkPages(
+  pages: PageText[],
+  opts?: { maxChars?: number; overlapChars?: number }
+): Array<{ pageStart: number; pageEnd: number; text: string }> {
+  const maxChars = opts?.maxChars ?? 2500;
+  const overlapChars = opts?.overlapChars ?? 250;
+  const chunks: Array<{ pageStart: number; pageEnd: number; text: string }> = [];
+
+  let cur = "";
+  let pageStart = pages[0]?.page ?? 1;
+  let pageEnd = pageStart;
+
+  const push = () => {
+    const t = cur.trim();
+    if (!t) return;
+    chunks.push({ pageStart, pageEnd, text: t });
+  };
+
+  for (const pg of pages) {
+    const addition = pg.text
+      ? `\n\n[Page ${pg.page}]\n${pg.text}`
+      : `\n\n[Page ${pg.page}]`;
+    if (cur.length + addition.length > maxChars && cur.trim().length > 0) {
+      push();
+      const overlap = cur.slice(Math.max(0, cur.length - overlapChars));
+      cur = overlap;
+      pageStart = pg.page;
+    }
+    cur += addition;
+    pageEnd = pg.page;
+  }
+  push();
+  return chunks;
+}
 
 function makeId(): string {
   return `${Date.now().toString(36)}-${Math.random()
@@ -103,6 +209,11 @@ export default function OptionsApp() {
   const [modelsError, setModelsError] = useState<string>("");
   const [modelsUpdatedAt, setModelsUpdatedAt] = useState<number | null>(null);
 
+  const [ragDocs, setRagDocs] = useState<RagDocument[]>([]);
+  const [ragBusy, setRagBusy] = useState(false);
+  const [ragError, setRagError] = useState("");
+  const [ragStatus, setRagStatus] = useState("");
+
   const hasOpenRouterKey = settings.openRouterApiKey.trim().length > 0;
 
   useEffect(() => {
@@ -112,6 +223,25 @@ export default function OptionsApp() {
       setDirty(false);
     });
   }, []);
+
+  const refreshRagDocs = async () => {
+    setRagError("");
+    const res = await sendMessage<RagListDocsResponse>({
+      type: "RAG_LIST_DOCUMENTS",
+    });
+    if (!res.ok) {
+      setRagError(res.error);
+      setRagDocs([]);
+      return;
+    }
+    setRagDocs(res.documents);
+  };
+
+  useEffect(() => {
+    if (!loaded) return;
+    void refreshRagDocs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
 
   const loadModels = async (apiKey: string) => {
     if (apiKey.trim().length === 0) {
@@ -261,6 +391,84 @@ export default function OptionsApp() {
         p.id === id ? { ...p, ...patch } : p
       ),
     });
+  };
+
+  const onUploadPdf = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    if (!hasOpenRouterKey) {
+      setRagError("Set an OpenRouter API key first (Save), then upload PDFs.");
+      return;
+    }
+
+    setRagBusy(true);
+    setRagError("");
+    setRagStatus("");
+    try {
+      for (const file of Array.from(files)) {
+        if (
+          file.type !== "application/pdf" &&
+          !file.name.toLowerCase().endsWith(".pdf")
+        ) {
+          continue;
+        }
+
+        setRagStatus(`Parsing ${file.name}…`);
+        const buf = await file.arrayBuffer();
+        const sha = await sha256Hex(buf);
+        const docId = sha;
+
+        const { pages, pageCount } = await extractPdfText(file);
+        const chunks = chunkPages(pages);
+        if (chunks.length === 0) throw new Error(`No text extracted from ${file.name}`);
+
+        setRagStatus(`Embedding & indexing ${file.name} (${chunks.length} chunks)…`);
+        const res = await sendMessage<RagIndexResponse>({
+          type: "RAG_INDEX_DOCUMENT",
+          apiKey: settings.openRouterApiKey,
+          doc: {
+            id: docId,
+            name: file.name,
+            pageCount,
+            byteSize: file.size,
+            sha256: sha,
+          },
+          chunks: chunks.map((c, i) => ({
+            id: `${docId}:${i}`,
+            pageStart: c.pageStart,
+            pageEnd: c.pageEnd,
+            text: c.text,
+          })),
+        });
+
+        if (!res.ok) throw new Error(res.error);
+      }
+
+      setRagStatus("Done.");
+      await refreshRagDocs();
+    } catch (e) {
+      setRagError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRagBusy(false);
+    }
+  };
+
+  const deletePdfDoc = async (docId: string) => {
+    const ok = window.confirm("Delete this PDF and all indexed chunks?");
+    if (!ok) return;
+    setRagBusy(true);
+    setRagError("");
+    try {
+      const res = await sendMessage<RagDeleteDocResponse>({
+        type: "RAG_DELETE_DOCUMENT",
+        docId,
+      });
+      if (!res.ok) throw new Error(res.error);
+      await refreshRagDocs();
+    } catch (e) {
+      setRagError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRagBusy(false);
+    }
   };
 
   if (!loaded) {
@@ -531,6 +739,72 @@ export default function OptionsApp() {
             </div>
           </>
         ) : null}
+      </section>
+
+      <section className="mb-10">
+        <div className="text-lg font-bold text-slate-900">PDF Library</div>
+        <div className="mt-1 text-sm text-slate-600">
+          Upload PDFs to build a local knowledge base. We’ll extract text, chunk
+          it, generate embeddings, and retrieve relevant excerpts at question
+          time.
+        </div>
+
+        {!hasOpenRouterKey ? (
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+            Add your <strong>OpenRouter API key</strong> above and click{" "}
+            <strong>Save</strong> to enable PDF indexing.
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex items-center gap-3">
+          <input
+            type="file"
+            accept="application/pdf"
+            multiple
+            disabled={!hasOpenRouterKey || ragBusy}
+            onChange={(e) => void onUploadPdf(e.target.files)}
+          />
+          {ragBusy ? <div className="text-sm text-slate-700">Working…</div> : null}
+          {ragStatus ? <div className="text-sm text-slate-700">{ragStatus}</div> : null}
+        </div>
+
+        {ragError ? (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {ragError}
+          </div>
+        ) : null}
+
+        <div className="mt-4 space-y-2">
+          {ragDocs.length === 0 ? (
+            <div className="text-sm text-slate-600">No PDFs indexed yet.</div>
+          ) : (
+            ragDocs.map((d) => (
+              <div
+                key={d.id}
+                className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-slate-900">
+                    {d.name}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-600">
+                    {d.pageCount} pages • {d.chunkCount} chunks •{" "}
+                    {Math.round(d.byteSize / 1024)} KB • embed model:{" "}
+                    <code>{d.embeddingModel}</code>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                  disabled={ragBusy}
+                  onClick={() => void deletePdfDoc(d.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </section>
 
       {models.length ? (

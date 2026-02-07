@@ -112,6 +112,74 @@ function fillTemplate(template: string, input: string): string {
   return `${template}\n\n${input}`;
 }
 
+type RagSearchHit = {
+  docId: string;
+  docName?: string;
+  chunkId: string;
+  score: number;
+  pageStart: number;
+  pageEnd: number;
+  text: string;
+};
+
+type RagSearchResponse =
+  | { ok: true; hits: RagSearchHit[] }
+  | { ok: false; error: string };
+
+function sendRagSearch(request: {
+  apiKey: string;
+  query: string;
+  topK: number;
+}): Promise<RagSearchResponse> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { type: "RAG_SEARCH", ...request },
+      (response) => resolve(response as RagSearchResponse)
+    );
+  });
+}
+
+function formatPdfContext(hits: RagSearchHit[]): string {
+  if (!hits.length) return "";
+  const MAX_CHARS_PER_HIT = 1400;
+  const lines: string[] = [];
+  lines.push("--- PDF Context (top matches) ---");
+  for (const h of hits) {
+    const name = h.docName ?? h.docId;
+    const pages =
+      h.pageStart === h.pageEnd
+        ? `p.${h.pageStart}`
+        : `p.${h.pageStart}-${h.pageEnd}`;
+    const text = (h.text || "").slice(0, MAX_CHARS_PER_HIT);
+    lines.push(`[${name} | ${pages}]`);
+    lines.push(text);
+    lines.push("");
+  }
+  lines.push("--- End PDF Context ---");
+  return lines.join("\n");
+}
+
+async function buildPromptWithPdfContext(args: {
+  apiKey: string;
+  template: string;
+  input: string;
+}): Promise<string> {
+  const base = fillTemplate(args.template, args.input);
+  try {
+    const res = await sendRagSearch({
+      apiKey: args.apiKey,
+      query: args.input,
+      topK: 6,
+    });
+    if (!res.ok) return base;
+    if (!res.hits.length) return base;
+    const ctx = formatPdfContext(res.hits);
+    return `${base}\n\n${ctx}`;
+  } catch {
+    return base;
+  }
+}
+
 function sendOpenRouterChat(request: {
   apiKey: string;
   model: string;
@@ -235,7 +303,11 @@ export default function ContentApp() {
     setError("");
 
     try {
-      const promptText = fillTemplate(prompt.template, input);
+      const promptText = await buildPromptWithPdfContext({
+        apiKey: settings.openRouterApiKey,
+        template: prompt.template,
+        input,
+      });
       const res = await sendOpenRouterChat({
         apiKey: settings.openRouterApiKey,
         model: prompt.model,
@@ -270,7 +342,11 @@ export default function ContentApp() {
 
     runningRef.current = true;
     try {
-      const promptText = fillTemplate(prompt.template, input.trim());
+      const promptText = await buildPromptWithPdfContext({
+        apiKey: settings.openRouterApiKey,
+        template: prompt.template,
+        input: input.trim(),
+      });
       const res = await sendOpenRouterChat({
         apiKey: settings.openRouterApiKey,
         model: prompt.model,

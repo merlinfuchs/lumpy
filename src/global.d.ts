@@ -15,6 +15,7 @@ declare const chrome: {
   };
   runtime: {
     openOptionsPage: () => void;
+    getURL: (path: string) => string;
     sendMessage: (
       message: unknown,
       responseCallback?: (response: unknown) => void

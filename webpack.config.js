@@ -1,6 +1,10 @@
 const path = require("path");
 const HTMLPlugin = require("html-webpack-plugin");
 const CopyPlugin = require("copy-webpack-plugin")
+const pdfWorkerPath = path.join(
+    __dirname,
+    "node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs"
+);
 
 module.exports = {
     entry: {
@@ -11,6 +15,11 @@ module.exports = {
     mode: "production",
     module: {
         rules: [
+            {
+                test: /\.mjs$/,
+                include: /node_modules/,
+                type: "javascript/auto",
+            },
             {
                 test: /\.tsx?$/,
                 use: [
@@ -56,12 +65,13 @@ module.exports = {
         new CopyPlugin({
             patterns: [
                 { from: "manifest.json", to: "../manifest.json" },
+                { from: pdfWorkerPath, to: "pdf.worker.min.mjs" },
             ],
         }),
         ...getHtmlPlugins(["options"]),
     ],
     resolve: {
-        extensions: [".tsx", ".ts", ".js"],
+        extensions: [".tsx", ".ts", ".js", ".mjs"],
     },
     output: {
         path: path.join(__dirname, "dist/js"),
