@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "manifest_version": 3,
+  "name": "Browse Assist",
+  "description": "This is a Chrome extension built with React and TypeScript",
+  "action": {
+    "default_popup": "js/popup.html",
+    "default_title": "Browse Assist"
+  },
+  "options_ui": {
+    "page": "js/options.html",
+    "open_in_tab": true
+  },
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["js/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
