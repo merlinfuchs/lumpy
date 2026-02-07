@@ -25,12 +25,26 @@ module.exports = {
             {
                 exclude: /node_modules/,
                 test: /\.css$/i,
-                use: [
-                    "style-loader",
-                    "css-loader"
-                    ,
-                    "postcss-loader"
-                ]
+                oneOf: [
+                    // For the content script, we inject styles into a ShadowRoot manually.
+                    // Export compiled CSS as a string instead of auto-injecting into <head>.
+                    {
+                        resource: /src\/content\/content\.css$/i,
+                        use: [
+                            {
+                                loader: "css-loader",
+                                options: {
+                                    exportType: "string",
+                                },
+                            },
+                            "postcss-loader",
+                        ],
+                    },
+                    // Default: inject CSS into the document <head> (extension pages).
+                    {
+                        use: ["style-loader", "css-loader", "postcss-loader"],
+                    },
+                ],
             },
             {
                 test: /\.(svg|png|ico|gif|jpe?g|webp)$/i,

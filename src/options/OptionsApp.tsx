@@ -136,29 +136,29 @@ export default function OptionsApp() {
 
   if (!loaded) {
     return (
-      <div className="ba-mx-auto ba-max-w-3xl ba-px-4 ba-py-8 ba-font-sans ba-text-slate-700">
+      <div className="mx-auto max-w-3xl px-4 py-8 font-sans text-slate-700">
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="ba-mx-auto ba-max-w-3xl ba-px-4 ba-py-8 ba-font-sans ba-text-slate-900">
-      <div className="ba-flex ba-items-start ba-justify-between ba-gap-4 ba-mb-6">
+    <div className="mx-auto max-w-3xl px-4 py-8 font-sans text-slate-900">
+      <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="ba-text-2xl ba-font-bold ba-tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight">
             Browse Assist Settings
           </h1>
-          <div className="ba-mt-1 ba-text-sm ba-text-slate-600">
+          <div className="mt-1 text-sm text-slate-600">
             Templates must include <code>{TEMPLATE_PLACEHOLDER}</code> — that’s
             where the extension will inject additional text.
           </div>
         </div>
 
-        <div className="ba-flex ba-items-center ba-gap-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            className="ba-rounded-lg ba-bg-blue-600 ba-px-4 ba-py-2 ba-text-sm ba-font-semibold ba-text-white hover:ba-bg-blue-700 disabled:ba-opacity-50 disabled:ba-cursor-not-allowed"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={save}
             disabled={saving || !dirty}
             title={!dirty ? "No changes to save" : "Save settings"}
@@ -169,21 +169,21 @@ export default function OptionsApp() {
       </div>
 
       {status ? (
-        <div className="ba-mb-6 ba-rounded-lg ba-border ba-border-blue-200 ba-bg-blue-50 ba-px-4 ba-py-3 ba-text-sm ba-text-slate-900">
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-slate-900">
           {status}
         </div>
       ) : null}
 
-      <section className="ba-mb-8">
+      <section className="mb-8">
         <label
-          className="ba-mb-2 ba-block ba-text-sm ba-font-semibold ba-text-slate-900"
+          className="mb-2 block text-sm font-semibold text-slate-900"
           htmlFor="openRouterApiKey"
         >
           OpenRouter API Key
         </label>
         <input
           id="openRouterApiKey"
-          className="ba-w-full ba-rounded-lg ba-border ba-border-slate-300 ba-bg-white ba-px-3 ba-py-2 ba-text-sm ba-text-slate-900 placeholder:ba-text-slate-400 focus:ba-outline-none focus:ba-ring-2 focus:ba-ring-blue-500"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           type="password"
           autoComplete="off"
           placeholder="sk-or-…"
@@ -192,26 +192,26 @@ export default function OptionsApp() {
             updateSettings({ ...settings, openRouterApiKey: e.target.value })
           }
         />
-        <div className="ba-mt-2 ba-text-xs ba-text-slate-600">
+        <div className="mt-2 text-xs text-slate-600">
           Stored in <code>chrome.storage.sync</code>. If you don’t want it
           synced across browsers, we can switch this to{" "}
           <code>storage.local</code>.
         </div>
       </section>
 
-      <section className="ba-mb-6">
-        <div className="ba-mb-4 ba-flex ba-items-start ba-justify-between ba-gap-4">
+      <section className="mb-6">
+        <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <div className="ba-text-lg ba-font-bold ba-text-slate-900">
+            <div className="text-lg font-bold text-slate-900">
               Prompts
             </div>
-            <div className="ba-mt-1 ba-text-sm ba-text-slate-600">
+            <div className="mt-1 text-sm text-slate-600">
               Each prompt selects an OpenRouter model and a template.
             </div>
           </div>
           <button
             type="button"
-            className="ba-rounded-lg ba-border ba-border-slate-300 ba-bg-white ba-px-3 ba-py-2 ba-text-sm ba-font-semibold ba-text-slate-900 hover:ba-bg-slate-50"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50"
             onClick={addPrompt}
           >
             + Add prompt
@@ -219,26 +219,26 @@ export default function OptionsApp() {
         </div>
 
         {missingPlaceholderPrompts.length ? (
-          <div className="ba-mb-4 ba-rounded-lg ba-border ba-border-amber-300 ba-bg-amber-50 ba-px-4 ba-py-3 ba-text-sm ba-text-slate-900">
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-slate-900">
             {missingPlaceholderPrompts.length} prompt
             {missingPlaceholderPrompts.length === 1 ? "" : "s"} missing{" "}
             <code>{TEMPLATE_PLACEHOLDER}</code>.
           </div>
         ) : null}
 
-        <div className="ba-flex ba-flex-col ba-gap-4">
+        <div className="flex flex-col gap-4">
           {settings.prompts.map((prompt, idx) => (
             <div
               key={prompt.id}
-              className="ba-rounded-xl ba-border ba-border-slate-200 ba-bg-white ba-p-4"
+              className="rounded-xl border border-slate-200 bg-white p-4"
             >
-              <div className="ba-mb-3 ba-flex ba-items-center ba-justify-between ba-gap-3">
-                <div className="ba-font-bold ba-text-slate-900">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="font-bold text-slate-900">
                   Prompt {idx + 1}
                 </div>
                 <button
                   type="button"
-                  className="ba-rounded-lg ba-bg-red-600 ba-px-3 ba-py-2 ba-text-sm ba-font-semibold ba-text-white hover:ba-bg-red-700 disabled:ba-opacity-50 disabled:ba-cursor-not-allowed"
+                  className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => removePrompt(prompt.id)}
                   disabled={settings.prompts.length <= 1}
                   title={
@@ -251,17 +251,17 @@ export default function OptionsApp() {
                 </button>
               </div>
 
-              <div className="ba-grid ba-grid-cols-1 ba-gap-4 ba-mb-4">
+              <div className="grid grid-cols-1 gap-4 mb-4">
                 <div>
                   <label
-                    className="ba-mb-2 ba-block ba-text-sm ba-font-semibold ba-text-slate-900"
+                    className="mb-2 block text-sm font-semibold text-slate-900"
                     htmlFor={`model-${prompt.id}`}
                   >
                     Model (OpenRouter)
                   </label>
                   <input
                     id={`model-${prompt.id}`}
-                    className="ba-w-full ba-rounded-lg ba-border ba-border-slate-300 ba-bg-white ba-px-3 ba-py-2 ba-text-sm ba-text-slate-900 placeholder:ba-text-slate-400 focus:ba-outline-none focus:ba-ring-2 focus:ba-ring-blue-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     type="text"
                     placeholder="e.g. openai/gpt-4o-mini"
                     value={prompt.model}
@@ -271,8 +271,8 @@ export default function OptionsApp() {
                   />
                 </div>
 
-                <div className="ba-rounded-lg ba-border ba-border-slate-200 ba-bg-slate-50 ba-px-3 ba-py-3">
-                  <div className="ba-flex ba-items-center ba-gap-2">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                  <div className="flex items-center gap-2">
                     <input
                       id={`secret-${prompt.id}`}
                       type="checkbox"
@@ -284,13 +284,13 @@ export default function OptionsApp() {
                       }
                     />
                     <label
-                      className="ba-text-sm ba-font-semibold ba-text-slate-900"
+                      className="text-sm font-semibold text-slate-900"
                       htmlFor={`secret-${prompt.id}`}
                     >
                       Secret Mode
                     </label>
                   </div>
-                  <div className="ba-mt-2 ba-text-xs ba-text-slate-600">
+                  <div className="mt-2 text-xs text-slate-600">
                     When enabled, you can treat this prompt as sensitive (e.g.
                     don’t log inputs / don’t show history).
                   </div>
@@ -299,21 +299,21 @@ export default function OptionsApp() {
 
               <div>
                 <label
-                  className="ba-mb-2 ba-block ba-text-sm ba-font-semibold ba-text-slate-900"
+                  className="mb-2 block text-sm font-semibold text-slate-900"
                   htmlFor={`template-${prompt.id}`}
                 >
                   Prompt template
                 </label>
                 <textarea
                   id={`template-${prompt.id}`}
-                  className="ba-w-full ba-rounded-lg ba-border ba-border-slate-300 ba-bg-white ba-px-3 ba-py-2 ba-font-mono ba-text-sm ba-text-slate-900 focus:ba-outline-none focus:ba-ring-2 focus:ba-ring-blue-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   rows={10}
                   value={prompt.template}
                   onChange={(e) =>
                     updatePrompt(prompt.id, { template: e.target.value })
                   }
                 />
-                <div className="ba-mt-2 ba-text-xs ba-text-slate-600">
+                <div className="mt-2 text-xs text-slate-600">
                   Include <code>{TEMPLATE_PLACEHOLDER}</code> where the extra
                   text should go.
                 </div>
@@ -323,7 +323,7 @@ export default function OptionsApp() {
         </div>
       </section>
 
-      <p className="ba-mt-6 ba-text-sm ba-text-slate-600">
+      <p className="mt-6 text-sm text-slate-600">
         {dirty ? "You have unsaved changes." : "All changes saved."}
       </p>
     </div>
