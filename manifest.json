@@ -4,8 +4,10 @@
   "name": "Browse Assist",
   "description": "This is a Chrome extension built with React and TypeScript",
   "action": {
-    "default_popup": "js/popup.html",
     "default_title": "Browse Assist"
+  },
+  "background": {
+    "service_worker": "js/background.js"
   },
   "options_ui": {
     "page": "js/options.html",

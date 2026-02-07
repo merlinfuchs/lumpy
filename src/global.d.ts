@@ -7,9 +7,10 @@ declare const chrome: {
   };
   runtime: {
     openOptionsPage: () => void;
-    getURL: (path: string) => string;
   };
-  tabs: {
-    create: (createProperties: { url: string }, callback?: () => void) => void;
+  action: {
+    onClicked: {
+      addListener: (callback: () => void) => void;
+    };
   };
 };
