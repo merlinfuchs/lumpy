@@ -6,7 +6,9 @@ export interface PromptConfig {
   id: string;
   model: string;
   template: string;
-  secretMode: boolean;
+  compatMode: boolean;
+  // Stealth mode: copy output to clipboard and avoid showing UI.
+  stealthMode?: boolean;
   // Command slot this prompt is bound to (e.g. "run-prompt-1")
   commandId?: string;
   // Legacy: previously used for on-page key listeners; no longer used.
@@ -28,11 +30,12 @@ const DEFAULT_SETTINGS: ExtensionSettingsV2 = {
       model: "openai/gpt-4o-mini",
       template:
         "You are Lumpy.\n\n" +
-        "Goal: help the user understand the current webpage and answer their question.\n" +
-        "Be concise, correct, and cite key details from the page context when relevant.\n\n" +
+        "Goal: help the user understand whatever question or input they provide.\n" +
+        "Be short, concise, correct, and cite key details from any context given to you.\n\n" +
         "User input:\n{{input}}\n\n" +
         "Response:",
-      secretMode: false,
+      compatMode: false,
+      stealthMode: false,
       commandId: "run-prompt-1",
     },
   ],
@@ -167,7 +170,7 @@ function normalizePrompt(value: unknown): PromptConfig | null {
     typeof v.id !== "string" ||
     typeof v.model !== "string" ||
     typeof v.template !== "string" ||
-    typeof v.secretMode !== "boolean"
+    typeof v.compatMode !== "boolean"
   ) {
     return null;
   }
@@ -176,7 +179,8 @@ function normalizePrompt(value: unknown): PromptConfig | null {
     id: v.id,
     model: v.model,
     template: v.template,
-    secretMode: v.secretMode,
+    compatMode: v.compatMode,
+    stealthMode: typeof v.stealthMode === "boolean" ? v.stealthMode : false,
     commandId: typeof v.commandId === "string" ? v.commandId : undefined,
     keyboardShortcut:
       typeof v.keyboardShortcut === "string" ? v.keyboardShortcut : undefined,
@@ -375,11 +379,12 @@ export default function OptionsApp() {
       model: "openai/gpt-4o-mini",
       template:
         "You are Lumpy.\n\n" +
-        "Goal: help the user understand the current webpage and answer their question.\n" +
-        "Be concise, correct, and cite key details from the page context when relevant.\n\n" +
+        "Goal: help the user understand whatever question or input they provide.\n" +
+        "Be concise, correct, and cite key details from any context given to you.\n\n" +
         `User input:\n${TEMPLATE_PLACEHOLDER}\n\n` +
         "Response:",
-      secretMode: false,
+      compatMode: false,
+      stealthMode: false,
       keyboardShortcut: "",
     };
     updateSettings({ ...settings, prompts: [...settings.prompts, next] });
@@ -738,25 +743,60 @@ export default function OptionsApp() {
                       <div className="rounded-2xl border border-slate-200/70 bg-white/60 px-3 py-3 ring-1 ring-slate-900/5">
                         <div className="flex items-center gap-2">
                           <input
-                            id={`secret-${prompt.id}`}
+                            id={`compat-${prompt.id}`}
                             type="checkbox"
-                            checked={prompt.secretMode}
-                            onChange={(e) =>
+                            checked={prompt.compatMode}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
                               updatePrompt(prompt.id, {
-                                secretMode: e.target.checked,
-                              })
-                            }
+                                compatMode: checked,
+                                // Keep modes mutually exclusive for clarity.
+                                stealthMode: checked
+                                  ? false
+                                  : prompt.stealthMode,
+                              });
+                            }}
                           />
                           <label
                             className="text-sm font-semibold text-slate-900"
-                            htmlFor={`secret-${prompt.id}`}
+                            htmlFor={`compat-${prompt.id}`}
                           >
-                            Secret Mode
+                            Compatibility Mode
                           </label>
                         </div>
                         <div className="mt-2 text-xs text-slate-600">
-                          When enabled, you can treat this prompt as sensitive
-                          (e.g. don’t log inputs / don’t show history).
+                          Uses the browser’s standard popup dialogs instead of
+                          the custom on-page Lumpy popup.
+                        </div>
+
+                        <div className="mt-3 border-t border-slate-200/70 pt-3">
+                          <div className="flex items-center gap-2">
+                            <input
+                              id={`secretcopy-${prompt.id}`}
+                              type="checkbox"
+                              checked={Boolean(prompt.stealthMode)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                updatePrompt(prompt.id, {
+                                  stealthMode: checked,
+                                  // Keep modes mutually exclusive for clarity.
+                                  compatMode: checked
+                                    ? false
+                                    : prompt.compatMode,
+                                });
+                              }}
+                            />
+                            <label
+                              className="text-sm font-semibold text-slate-900"
+                              htmlFor={`secretcopy-${prompt.id}`}
+                            >
+                              Secret (Copy to clipboard)
+                            </label>
+                          </div>
+                          <div className="mt-2 text-xs text-slate-600">
+                            Runs without showing any UI and copies the answer to
+                            your clipboard (more discreet).
+                          </div>
                         </div>
                       </div>
                     </div>

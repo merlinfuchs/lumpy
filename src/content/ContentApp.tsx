@@ -4,7 +4,8 @@ type PromptConfig = {
   id: string;
   model: string;
   template: string;
-  secretMode: boolean;
+  compatMode: boolean;
+  stealthMode?: boolean;
   commandId?: string;
   keyboardShortcut?: string;
 };
@@ -23,7 +24,7 @@ function normalizePrompt(value: unknown): PromptConfig | null {
     typeof v.id !== "string" ||
     typeof v.model !== "string" ||
     typeof v.template !== "string" ||
-    typeof v.secretMode !== "boolean"
+    typeof v.compatMode !== "boolean"
   ) {
     return null;
   }
@@ -31,7 +32,8 @@ function normalizePrompt(value: unknown): PromptConfig | null {
     id: v.id,
     model: v.model,
     template: v.template,
-    secretMode: v.secretMode,
+    compatMode: v.compatMode,
+    stealthMode: typeof v.stealthMode === "boolean" ? v.stealthMode : false,
     keyboardShortcut:
       typeof v.keyboardShortcut === "string" ? v.keyboardShortcut : "",
   };
@@ -220,10 +222,17 @@ export default function ContentApp() {
   }, []);
 
   const triggerPrompt = async (prompt: PromptConfig) => {
-    // Secret mode should leave no visible UI footprint.
-    if (prompt.secretMode) {
+    // Secret (clipboard) mode should leave no visible UI footprint.
+    if (prompt.stealthMode) {
       hidePopup();
-      await runSecretPrompt(prompt);
+      await runSecretCopyPrompt(prompt);
+      return;
+    }
+
+    // Compatibility mode should leave no visible UI footprint.
+    if (prompt.compatMode) {
+      hidePopup();
+      await runCompatibilityPrompt(prompt);
       return;
     }
 
@@ -289,7 +298,36 @@ export default function ContentApp() {
     }
   };
 
-  const runSecretPrompt = async (prompt: PromptConfig) => {
+  function copyToClipboardBestEffort(text: string): boolean {
+    // Best-effort clipboard copy with no UI. This may still be blocked on some sites
+    // if the browser requires an explicit user gesture.
+    try {
+      // If available, attempt async clipboard API.
+      void navigator.clipboard?.writeText?.(text);
+      return true;
+    } catch {
+      // ignore
+    }
+
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "true");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.top = "0";
+      document.documentElement.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  const runCompatibilityPrompt = async (prompt: PromptConfig) => {
     if (runningRef.current) return;
     const apiKey = apiKeyRef.current || settings.openRouterApiKey;
     if (!apiKey.trim()) {
@@ -301,7 +339,8 @@ export default function ContentApp() {
 
     const selected = getSelectedText();
     const input =
-      selected || (window.prompt("Lumpy (Secret Mode): Enter input", "") ?? "");
+      selected ||
+      (window.prompt("Lumpy (Compatibility Mode): Enter input", "") ?? "");
     if (!input.trim()) return;
 
     runningRef.current = true;
@@ -318,17 +357,48 @@ export default function ContentApp() {
       });
 
       if (!res.ok) {
-        window.alert(`Lumpy (Secret Mode) error: ${res.error}`);
+        window.alert(`Lumpy (Compatibility Mode) error: ${res.error}`);
         return;
       }
 
       window.alert(res.text);
     } catch (err) {
       window.alert(
-        `Lumpy (Secret Mode) error: ${
+        `Lumpy (Compatibility Mode) error: ${
           err instanceof Error ? err.message : String(err)
         }`
       );
+    } finally {
+      runningRef.current = false;
+    }
+  };
+
+  const runSecretCopyPrompt = async (prompt: PromptConfig) => {
+    if (runningRef.current) return;
+    const apiKey = apiKeyRef.current || settings.openRouterApiKey;
+    if (!apiKey.trim()) {
+      // No UI in secret mode; fail silently.
+      return;
+    }
+
+    const selected = getSelectedText();
+    // Keep this mode discreet: if there's no selection, do nothing (no prompt UI).
+    if (!selected.trim()) return;
+
+    runningRef.current = true;
+    try {
+      const promptText = await buildPromptWithPdfContext({
+        apiKey,
+        template: prompt.template,
+        input: selected.trim(),
+      });
+      const res = await sendOpenRouterChat({
+        apiKey,
+        model: prompt.model,
+        prompt: promptText,
+      });
+      if (!res.ok) return;
+      copyToClipboardBestEffort(res.text);
     } finally {
       runningRef.current = false;
     }

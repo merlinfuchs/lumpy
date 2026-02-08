@@ -35,7 +35,8 @@ type StoredPrompt = {
   id: string;
   model: string;
   template: string;
-  secretMode: boolean;
+  compatMode: boolean;
+  stealthMode?: boolean;
   commandId?: string;
 };
 
@@ -46,7 +47,7 @@ function normalizeStoredPrompt(value: unknown): StoredPrompt | null {
     typeof v.id !== "string" ||
     typeof v.model !== "string" ||
     typeof v.template !== "string" ||
-    typeof v.secretMode !== "boolean"
+    typeof v.compatMode !== "boolean"
   ) {
     return null;
   }
@@ -54,7 +55,8 @@ function normalizeStoredPrompt(value: unknown): StoredPrompt | null {
     id: v.id,
     model: v.model,
     template: v.template,
-    secretMode: v.secretMode,
+    compatMode: v.compatMode,
+    stealthMode: typeof v.stealthMode === "boolean" ? v.stealthMode : false,
     commandId: typeof v.commandId === "string" ? v.commandId : undefined,
   };
 }
