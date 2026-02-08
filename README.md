@@ -50,7 +50,8 @@ Build output is written to `dist/`.
 ## Scripts
 
 - `npm run build`: production build to `dist/`
-- `npm run build:firefox`: builds and creates `artifacts/lumpy-firefox.zip` (requires `FIREFOX_GECKO_ID`)
+- `npm run build:chrome` (or `npm run build-chrome`): builds and creates `artifacts/lumpy-chrome.zip`
+- `npm run build:firefox` (or `npm run build-firefox`): builds and creates `artifacts/lumpy-firefox.zip`
 - `npm run watch`: rebuild on changes
 
 ## Privacy

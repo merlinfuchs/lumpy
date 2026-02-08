@@ -22,7 +22,10 @@
   },
   "scripts": {
     "build": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\" && webpack --config webpack.config.js",
+    "build:chrome": "node scripts/build-chrome.mjs",
+    "build-chrome": "npm run build:chrome",
     "build:firefox": "node scripts/build-firefox.mjs",
+    "build-firefox": "npm run build:firefox",
     "watch": "webpack -w --config webpack.config.js"
   },
   "eslintConfig": {

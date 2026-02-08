@@ -1,0 +1,44 @@
+name: Build release artifacts (Chrome + Firefox)
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to upload assets to the release
+    env:
+      NODE_VERSION: "20"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install zip
+        run: sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Build once
+        run: npm run build
+
+      - name: Package Chrome + Firefox zips
+        run: |
+          SKIP_BUILD=1 npm run build:chrome
+          SKIP_BUILD=1 npm run build:firefox
+
+      - name: Upload artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/lumpy-chrome.zip
+            artifacts/lumpy-firefox.zip
+
