@@ -65,6 +65,7 @@ module.exports = {
         new CopyPlugin({
             patterns: [
                 { from: "manifest.json", to: "../manifest.json" },
+                { from: "static", to: "../static" },
                 { from: pdfWorkerPath, to: "pdf.worker.min.mjs" },
             ],
         }),
@@ -83,7 +84,7 @@ function getHtmlPlugins(chunks) {
     return chunks.map(
         (chunk) =>
             new HTMLPlugin({
-                title: "React extension",
+                title: "Lumpy",
                 filename: `${chunk}.html`,
                 chunks: [chunk],
             })
