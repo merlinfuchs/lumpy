@@ -362,6 +362,7 @@ export default function ContentApp() {
       }
 
       window.alert(res.text);
+      copyToClipboardBestEffort(res.text);
     } catch (err) {
       window.alert(
         `Lumpy (Compatibility Mode) error: ${
