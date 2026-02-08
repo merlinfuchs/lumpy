@@ -1,46 +1,86 @@
-# Getting Started with Create React App
+<p align="center">
+  <img src="static/icon512.png" alt="Lumpy" width="128" height="128" />
+</p>
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# Lumpy
 
-## Available Scripts
+Lumpy is a fun, lightweight browser extension that helps you understand what you’re reading on the web. Highlight text on any page, trigger a keyboard shortcut, and Lumpy will generate a helpful answer (via OpenRouter) right on the page.
 
-In the project directory, you can run:
+## What it does
 
-### `npm start`
+- **On-page helper**: shows a small popup on the current page with the response.
+- **Works with selection or typed input**: highlight text first, or enter input when prompted.
+- **Custom prompts**: configure multiple prompt slots, pick models, and edit templates.
+- **Optional PDF Library**: upload PDFs, index them locally, and retrieve relevant excerpts when asking questions.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## Setup (development / unpacked)
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+### Build
 
-### `npm test`
+```bash
+npm ci
+npm run build
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Build output is written to `dist/`.
 
-### `npm run build`
+### Load in Chrome / Chromium
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- Open `chrome://extensions`
+- Enable **Developer mode**
+- Click **Load unpacked**
+- Select the `dist/` folder
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Load in Firefox (temporary add-on)
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- Open `about:debugging#/runtime/this-firefox`
+- Click **Load Temporary Add-on…**
+- Select `dist/manifest.json`
 
-### `npm run eject`
+## Using Lumpy
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+- Open the extension **Options/Settings** page and add your **OpenRouter API key**
+- Assign prompt slots to commands, then set keyboard shortcuts in:
+  - Chrome: `chrome://extensions/shortcuts`
+- On any webpage:
+  - Select some text
+  - Run your configured shortcut
+  - Read the answer in the on-page popup
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Scripts
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+- `npm run build`: production build to `dist/`
+- `npm run watch`: rebuild on changes
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## Privacy
 
-## Learn More
+See `PRIVACY.md`.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Store publishing (GitHub Actions)
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+This repo includes a workflow that builds `dist/`, packages it, and publishes to:
+
+- **Chrome Web Store** (upload + publish)
+- **Firefox AMO** (submit/sign via `web-ext sign`)
+
+### Triggers
+
+- **Automatic**: when a GitHub Release is published
+- **Manual**: via *Actions → Publish to Chrome + Firefox Stores*
+
+### Required GitHub Secrets
+
+Set these in *Repo → Settings → Secrets and variables → Actions → Secrets*:
+
+#### Chrome Web Store
+
+- `CHROME_EXTENSION_ID`
+- `CHROME_CLIENT_ID`
+- `CHROME_CLIENT_SECRET`
+- `CHROME_REFRESH_TOKEN`
+
+#### Firefox AMO
+
+- `FIREFOX_JWT_ISSUER`
+- `FIREFOX_JWT_SECRET`
+- `FIREFOX_GECKO_ID` (the add-on ID, e.g. `lumpy@example.com` or a UUID)
