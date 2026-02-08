@@ -86,9 +86,8 @@ function sendRagSearch(request: {
   topK: number;
 }): Promise<RagSearchResponse> {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      { type: "RAG_SEARCH", ...request },
-      (response) => resolve(response as RagSearchResponse)
+    chrome.runtime.sendMessage({ type: "RAG_SEARCH", ...request }, (response) =>
+      resolve(response as RagSearchResponse)
     );
   });
 }
@@ -148,6 +147,11 @@ function sendOpenRouterChat(request: {
 }
 
 export default function ContentApp() {
+  const logoUrl = useMemo(
+    () => chrome.runtime.getURL("static/icon512.png"),
+    []
+  );
+
   const [visible, setVisible] = useState(false);
   const [mode, setMode] = useState<UiMode>("idle");
   const [settings, setSettings] = useState<ExtensionSettings>({
@@ -231,7 +235,9 @@ export default function ContentApp() {
     const apiKey = apiKeyRef.current || settings.openRouterApiKey;
     if (!apiKey.trim()) {
       setMode("error");
-      setError("OpenRouter API key is not configured. Open settings to add it.");
+      setError(
+        "OpenRouter API key is not configured. Open settings to add it."
+      );
       return;
     }
 
@@ -249,7 +255,11 @@ export default function ContentApp() {
     await runPrompt(prompt, selected, apiKey);
   };
 
-  const runPrompt = async (prompt: PromptConfig, input: string, apiKey: string) => {
+  const runPrompt = async (
+    prompt: PromptConfig,
+    input: string,
+    apiKey: string
+  ) => {
     if (runningRef.current) return;
     runningRef.current = true;
     setMode("thinking");
@@ -284,15 +294,14 @@ export default function ContentApp() {
     const apiKey = apiKeyRef.current || settings.openRouterApiKey;
     if (!apiKey.trim()) {
       window.alert(
-        "Browse Assist: OpenRouter API key is not configured. Open the extension settings to add it."
+        "Lumpy: OpenRouter API key is not configured. Open the extension settings to add it."
       );
       return;
     }
 
     const selected = getSelectedText();
     const input =
-      selected ||
-      (window.prompt("Browse Assist (Secret Mode): Enter input", "") ?? "");
+      selected || (window.prompt("Lumpy (Secret Mode): Enter input", "") ?? "");
     if (!input.trim()) return;
 
     runningRef.current = true;
@@ -309,14 +318,14 @@ export default function ContentApp() {
       });
 
       if (!res.ok) {
-        window.alert(`Browse Assist (Secret Mode) error: ${res.error}`);
+        window.alert(`Lumpy (Secret Mode) error: ${res.error}`);
         return;
       }
 
       window.alert(res.text);
     } catch (err) {
       window.alert(
-        `Browse Assist (Secret Mode) error: ${
+        `Lumpy (Secret Mode) error: ${
           err instanceof Error ? err.message : String(err)
         }`
       );
@@ -328,27 +337,36 @@ export default function ContentApp() {
   if (!visible) return null;
 
   return (
-    <div className="w-80 overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-900 shadow-2xl">
-      <div className="flex items-center justify-between gap-3 bg-blue-600 px-3 py-2">
-        <div className="min-w-0">
-          <div className="text-sm font-bold text-white">Browse Assist</div>
-          {activePrompt ? (
-            <div className="truncate text-[11px] text-white/90">
-              {activePrompt.model}
-              {activePrompt.keyboardShortcut
-                ? ` • ${activePrompt.keyboardShortcut}`
-                : ""}
+    <div className="w-80 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 text-slate-900 shadow-2xl ring-1 ring-slate-900/5 backdrop-blur">
+      <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <img
+            src={logoUrl}
+            alt="Lumpy"
+            className="size-10 rounded-xl drop-shadow-sm"
+          />
+          <div className="min-w-0">
+            <div className="text-sm font-black tracking-tight text-white">
+              Lumpy
             </div>
-          ) : (
-            <div className="text-[11px] text-white/90">
-              Press a configured shortcut to run a prompt
-            </div>
-          )}
+            {activePrompt ? (
+              <div className="truncate text-[11px] text-white/90">
+                {activePrompt.model}
+                {activePrompt.keyboardShortcut
+                  ? ` • ${activePrompt.keyboardShortcut}`
+                  : ""}
+              </div>
+            ) : (
+              <div className="text-[11px] text-white/90">
+                Press a configured shortcut to run a prompt
+              </div>
+            )}
+          </div>
         </div>
         <button
           type="button"
           onClick={hidePopup}
-          className="rounded-lg bg-white/20 px-2 py-1 text-xs font-semibold text-white hover:bg-white/30"
+          className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-extrabold text-white hover:bg-white/30"
           title="Close"
         >
           Close
@@ -369,7 +387,7 @@ export default function ContentApp() {
             </div>
             <textarea
               ref={textareaRef}
-              className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-2xl border border-slate-300/80 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
               rows={4}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -378,14 +396,14 @@ export default function ContentApp() {
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50"
+                className="rounded-full border border-slate-300/80 bg-white/80 px-3 py-2 text-xs font-extrabold text-slate-900 shadow-sm backdrop-blur hover:bg-white"
                 onClick={hidePopup}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                className="rounded-full bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 px-3 py-2 text-xs font-extrabold text-white shadow-sm ring-1 ring-black/5 hover:from-fuchsia-500 hover:via-purple-500 hover:to-indigo-500 disabled:opacity-50"
                 disabled={!activePrompt || !inputText.trim()}
                 onClick={() => {
                   if (!activePrompt) return;
@@ -401,8 +419,8 @@ export default function ContentApp() {
 
         {mode === "thinking" ? (
           <div className="flex items-center gap-2 text-sm text-slate-800">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
-            Thinking…
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-fuchsia-600" />
+            Lumpy is thinking…
           </div>
         ) : null}
 
@@ -414,7 +432,7 @@ export default function ContentApp() {
             {!settings.openRouterApiKey.trim() ? (
               <button
                 type="button"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50"
+                className="rounded-full border border-slate-300/80 bg-white/80 px-3 py-2 text-xs font-extrabold text-slate-900 shadow-sm backdrop-blur hover:bg-white"
                 onClick={() => chrome.runtime.openOptionsPage()}
               >
                 Open settings
@@ -423,7 +441,7 @@ export default function ContentApp() {
             <div className="flex justify-end">
               <button
                 type="button"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50"
+                className="rounded-full border border-slate-300/80 bg-white/80 px-3 py-2 text-xs font-extrabold text-slate-900 shadow-sm backdrop-blur hover:bg-white"
                 onClick={hidePopup}
               >
                 Close
@@ -440,7 +458,7 @@ export default function ContentApp() {
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50"
+                className="rounded-full border border-slate-300/80 bg-white/80 px-3 py-2 text-xs font-extrabold text-slate-900 shadow-sm backdrop-blur hover:bg-white"
                 onClick={hidePopup}
               >
                 Close

@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS: ExtensionSettingsV2 = {
       id: "default",
       model: "openai/gpt-4o-mini",
       template:
-        "You are Browse Assist.\n\n" +
+        "You are Lumpy.\n\n" +
         "Goal: help the user understand the current webpage and answer their question.\n" +
         "Be concise, correct, and cite key details from the page context when relevant.\n\n" +
         "User input:\n{{input}}\n\n" +
@@ -78,7 +78,8 @@ function sendMessage<TResponse>(message: unknown): Promise<TResponse> {
 function bytesToHex(bytes: ArrayBuffer): string {
   const u8 = new Uint8Array(bytes);
   let out = "";
-  for (let i = 0; i < u8.length; i++) out += u8[i].toString(16).padStart(2, "0");
+  for (let i = 0; i < u8.length; i++)
+    out += u8[i].toString(16).padStart(2, "0");
   return out;
 }
 
@@ -123,7 +124,8 @@ function chunkPages(
 ): Array<{ pageStart: number; pageEnd: number; text: string }> {
   const maxChars = opts?.maxChars ?? 2500;
   const overlapChars = opts?.overlapChars ?? 250;
-  const chunks: Array<{ pageStart: number; pageEnd: number; text: string }> = [];
+  const chunks: Array<{ pageStart: number; pageEnd: number; text: string }> =
+    [];
 
   let cur = "";
   let pageStart = pages[0]?.page ?? 1;
@@ -201,6 +203,11 @@ function normalizeSettings(
 }
 
 export default function OptionsApp() {
+  const logoUrl = useMemo(
+    () => chrome.runtime.getURL("static/icon512.png"),
+    []
+  );
+
   const [loaded, setLoaded] = useState(false);
   const [settings, setSettings] =
     useState<ExtensionSettingsV2>(DEFAULT_SETTINGS);
@@ -367,7 +374,7 @@ export default function OptionsApp() {
       id: makeId(),
       model: "openai/gpt-4o-mini",
       template:
-        "You are Browse Assist.\n\n" +
+        "You are Lumpy.\n\n" +
         "Goal: help the user understand the current webpage and answer their question.\n" +
         "Be concise, correct, and cite key details from the page context when relevant.\n\n" +
         `User input:\n${TEMPLATE_PLACEHOLDER}\n\n` +
@@ -423,9 +430,12 @@ export default function OptionsApp() {
 
         const { pages, pageCount } = await extractPdfText(file);
         const chunks = chunkPages(pages);
-        if (chunks.length === 0) throw new Error(`No text extracted from ${file.name}`);
+        if (chunks.length === 0)
+          throw new Error(`No text extracted from ${file.name}`);
 
-        setRagStatus(`Embedding & indexing ${file.name} (${chunks.length} chunks)…`);
+        setRagStatus(
+          `Embedding & indexing ${file.name} (${chunks.length} chunks)…`
+        );
         const res = await sendMessage<RagIndexResponse>({
           type: "RAG_INDEX_DOCUMENT",
           apiKey: settings.openRouterApiKey,
@@ -477,360 +487,392 @@ export default function OptionsApp() {
 
   if (!loaded) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 font-sans text-slate-700">
-        Loading…
+      <div className="min-h-screen bg-gradient-to-b from-fuchsia-50 via-white to-indigo-50">
+        <div className="mx-auto max-w-3xl px-4 py-10 font-sans text-slate-700">
+          Loading…
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 font-sans text-slate-900">
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Browse Assist Settings
-          </h1>
-          <div className="mt-1 text-sm text-slate-600">
-            Templates must include <code>{TEMPLATE_PLACEHOLDER}</code> — that’s
-            where the extension will inject additional text.
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={resetSettings}
-            disabled={saving}
-            title="Reset settings to defaults"
-          >
-            Reset settings
-          </button>
-          <button
-            type="button"
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={save}
-            disabled={saving || !dirty}
-            title={!dirty ? "No changes to save" : "Save settings"}
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
-        </div>
+    <div className="min-h-screen bg-gradient-to-b from-fuchsia-50 via-white to-indigo-50 font-sans text-slate-900">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 overflow-hidden"
+      >
+        <div className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-fuchsia-300/30 blur-3xl" />
+        <div className="absolute top-32 -right-24 h-80 w-80 rounded-full bg-indigo-300/30 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-amber-200/20 blur-3xl" />
       </div>
 
-      {status ? (
-        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-slate-900">
-          {status}
-        </div>
-      ) : null}
-
-      <section className="mb-8">
-        <label
-          className="mb-2 block text-sm font-semibold text-slate-900"
-          htmlFor="openRouterApiKey"
-        >
-          OpenRouter API Key
-        </label>
-        <input
-          id="openRouterApiKey"
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          type="password"
-          autoComplete="off"
-          placeholder="sk-or-…"
-          value={settings.openRouterApiKey}
-          onChange={(e) =>
-            updateSettings({ ...settings, openRouterApiKey: e.target.value })
-          }
-        />
-        <div className="mt-2 text-xs text-slate-600">
-          Stored in <code>chrome.storage.sync</code>. If you don’t want it
-          synced across browsers, we can switch this to{" "}
-          <code>storage.local</code>.
-        </div>
-      </section>
-
-      <section className="mb-6">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <div className="text-lg font-bold text-slate-900">Prompts</div>
-            <div className="mt-1 text-sm text-slate-600">
-              Each prompt selects an OpenRouter model and a template.
-            </div>
-            <div className="mt-2 text-xs text-slate-600">
-              {modelsLoading
-                ? "Loading models…"
-                : models.length
-                ? `Models loaded: ${models.length}${
-                    modelsUpdatedAt
-                      ? ` (updated ${new Date(
-                          modelsUpdatedAt
-                        ).toLocaleTimeString()})`
-                      : ""
-                  }`
-                : "Models not loaded."}
-              {modelsError ? (
-                <div className="mt-1 text-xs text-red-700">{modelsError}</div>
-              ) : null}
+      <div className="relative mx-auto max-w-3xl px-4 py-10">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-3">
+            <img
+              src={logoUrl}
+              alt="Lumpy"
+              className="size-16 rounded-2xl drop-shadow-sm"
+            />
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">
+                Lumpy Settings
+              </h1>
+              <div className="mt-1 text-sm text-slate-700">
+                Make Lumpy behave how you like. Templates must include{" "}
+                <code className="rounded bg-white/70 px-1 py-0.5 ring-1 ring-slate-900/10">
+                  {TEMPLATE_PLACEHOLDER}
+                </code>
+                .
+              </div>
             </div>
           </div>
-          <button
-            type="button"
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50"
-            onClick={addPrompt}
-            disabled={!hasOpenRouterKey}
-          >
-            + Add prompt
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-slate-300/80 bg-white/80 px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm backdrop-blur hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={resetSettings}
+              disabled={saving}
+              title="Reset settings to defaults"
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              className="rounded-full bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 px-4 py-2 text-sm font-extrabold text-white shadow-sm ring-1 ring-black/5 hover:from-fuchsia-500 hover:via-purple-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={save}
+              disabled={saving || !dirty}
+              title={!dirty ? "No changes to save" : "Save settings"}
+            >
+              {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+            </button>
+          </div>
         </div>
 
-        {!hasOpenRouterKey ? (
-          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
-            Add your <strong>OpenRouter API key</strong> above (then click{" "}
-            <strong>Save</strong>) to configure prompts.
+        {status ? (
+          <div className="mb-6 rounded-2xl border border-fuchsia-200 bg-white/70 px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">
+            {status}
           </div>
         ) : null}
 
-        {hasOpenRouterKey ? (
-          <>
-            {missingPlaceholderPrompts.length ? (
-              <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-slate-900">
-                {missingPlaceholderPrompts.length} prompt
-                {missingPlaceholderPrompts.length === 1 ? "" : "s"} missing{" "}
-                <code>{TEMPLATE_PLACEHOLDER}</code>.
+        <section className="mb-8">
+          <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">
+            <label
+              className="mb-2 block text-sm font-extrabold text-slate-900"
+              htmlFor="openRouterApiKey"
+            >
+              OpenRouter API Key
+            </label>
+            <input
+              id="openRouterApiKey"
+              className="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+              type="password"
+              autoComplete="off"
+              placeholder="sk-or-…"
+              value={settings.openRouterApiKey}
+              onChange={(e) =>
+                updateSettings({
+                  ...settings,
+                  openRouterApiKey: e.target.value,
+                })
+              }
+            />
+            <div className="mt-2 text-xs text-slate-600">
+              Stored in <code>chrome.storage.sync</code>.
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-6">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
+              <div className="text-lg font-bold text-slate-900">Prompts</div>
+              <div className="mt-1 text-sm text-slate-600">
+                Each prompt selects an OpenRouter model and a template.
               </div>
-            ) : null}
+              <div className="mt-2 text-xs text-slate-600">
+                {modelsLoading
+                  ? "Loading models…"
+                  : models.length
+                  ? `Models loaded: ${models.length}${
+                      modelsUpdatedAt
+                        ? ` (updated ${new Date(
+                            modelsUpdatedAt
+                          ).toLocaleTimeString()})`
+                        : ""
+                    }`
+                  : "Models not loaded."}
+                {modelsError ? (
+                  <div className="mt-1 text-xs text-red-700">{modelsError}</div>
+                ) : null}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="rounded-full border border-slate-300/80 bg-white/80 px-3 py-2 text-sm font-extrabold text-slate-900 shadow-sm backdrop-blur hover:bg-white disabled:opacity-50"
+              onClick={addPrompt}
+              disabled={!hasOpenRouterKey}
+            >
+              + Add prompt
+            </button>
+          </div>
 
-            <div className="flex flex-col gap-4">
-              {settings.prompts.map((prompt, idx) => (
-                <div
-                  key={prompt.id}
-                  className="rounded-xl border border-slate-200 bg-white p-4"
-                >
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="font-bold text-slate-900">
-                      Prompt {idx + 1}
-                    </div>
-                    <button
-                      type="button"
-                      className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={() => removePrompt(prompt.id)}
-                      disabled={settings.prompts.length <= 1}
-                      title={
-                        settings.prompts.length <= 1
-                          ? "Keep at least one prompt"
-                          : "Remove prompt"
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
+          {!hasOpenRouterKey ? (
+            <div className="mb-4 rounded-2xl border border-slate-200/70 bg-white/70 px-4 py-3 text-sm text-slate-800 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">
+              Add your <strong>OpenRouter API key</strong> above (then click{" "}
+              <strong>Save changes</strong>) to configure prompts.
+            </div>
+          ) : null}
 
-                  <div className="grid grid-cols-1 gap-4 mb-4">
-                    <div>
-                      <label
-                        className="mb-2 block text-sm font-semibold text-slate-900"
-                        htmlFor={`model-${prompt.id}`}
-                      >
-                        Model (OpenRouter)
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id={`model-${prompt.id}`}
-                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          type="text"
-                          list="openrouter-models"
-                          placeholder="e.g. openai/gpt-4o-mini"
-                          value={prompt.model}
-                          onChange={(e) =>
-                            updatePrompt(prompt.id, { model: e.target.value })
-                          }
-                        />
-                        <button
-                          type="button"
-                          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-50 disabled:opacity-50"
-                          onClick={() =>
-                            void loadModels(settings.openRouterApiKey)
-                          }
-                          disabled={modelsLoading || !hasOpenRouterKey}
-                          title="Refresh model list"
-                        >
-                          {modelsLoading ? "…" : "Refresh"}
-                        </button>
+          {hasOpenRouterKey ? (
+            <>
+              {missingPlaceholderPrompts.length ? (
+                <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50/70 px-4 py-3 text-sm text-slate-900 shadow-sm ring-1 ring-slate-900/5">
+                  {missingPlaceholderPrompts.length} prompt
+                  {missingPlaceholderPrompts.length === 1
+                    ? ""
+                    : "s"} missing <code>{TEMPLATE_PLACEHOLDER}</code>.
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-4">
+                {settings.prompts.map((prompt, idx) => (
+                  <div
+                    key={prompt.id}
+                    className="rounded-2xl border border-slate-200/70 bg-white/70 p-4 shadow-sm ring-1 ring-slate-900/5 backdrop-blur"
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="font-bold text-slate-900">
+                        Prompt {idx + 1}
                       </div>
-                      {models.length ? (
-                        <div className="mt-2 text-xs text-slate-600">
-                          Tip: start typing to filter, then pick from the list.
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div>
-                      <label
-                        className="mb-2 block text-sm font-semibold text-slate-900"
-                        htmlFor={`command-${prompt.id}`}
-                      >
-                        Command slot
-                      </label>
-                      <select
-                        id={`command-${prompt.id}`}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={prompt.commandId ?? ""}
-                        onChange={(e) =>
-                          updatePrompt(prompt.id, {
-                            commandId: e.target.value || undefined,
-                          })
+                      <button
+                        type="button"
+                        className="rounded-full bg-red-600 px-3 py-2 text-sm font-extrabold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => removePrompt(prompt.id)}
+                        disabled={settings.prompts.length <= 1}
+                        title={
+                          settings.prompts.length <= 1
+                            ? "Keep at least one prompt"
+                            : "Remove prompt"
                         }
                       >
-                        <option value="">Unassigned</option>
-                        {Array.from({ length: 10 }).map((_, i) => {
-                          const id = `run-prompt-${i + 1}`;
-                          return (
-                            <option key={id} value={id}>
-                              {id}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <div className="mt-2 text-xs text-slate-600">
-                        Assign this prompt to one of the predefined commands,
-                        then set a keyboard shortcut in{" "}
-                        <code>chrome://extensions/shortcuts</code>.
-                      </div>
+                        Remove
+                      </button>
                     </div>
 
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-                      <div className="flex items-center gap-2">
-                        <input
-                          id={`secret-${prompt.id}`}
-                          type="checkbox"
-                          checked={prompt.secretMode}
+                    <div className="grid grid-cols-1 gap-4 mb-4">
+                      <div>
+                        <label
+                          className="mb-2 block text-sm font-semibold text-slate-900"
+                          htmlFor={`model-${prompt.id}`}
+                        >
+                          Model (OpenRouter)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            id={`model-${prompt.id}`}
+                            className="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                            type="text"
+                            list="openrouter-models"
+                            placeholder="e.g. openai/gpt-4o-mini"
+                            value={prompt.model}
+                            onChange={(e) =>
+                              updatePrompt(prompt.id, { model: e.target.value })
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-full border border-slate-300/80 bg-white/80 px-3 py-2 text-sm font-extrabold text-slate-900 shadow-sm backdrop-blur hover:bg-white disabled:opacity-50"
+                            onClick={() =>
+                              void loadModels(settings.openRouterApiKey)
+                            }
+                            disabled={modelsLoading || !hasOpenRouterKey}
+                            title="Refresh model list"
+                          >
+                            {modelsLoading ? "…" : "Refresh"}
+                          </button>
+                        </div>
+                        {models.length ? (
+                          <div className="mt-2 text-xs text-slate-600">
+                            Tip: start typing to filter, then pick from the
+                            list.
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div>
+                        <label
+                          className="mb-2 block text-sm font-semibold text-slate-900"
+                          htmlFor={`command-${prompt.id}`}
+                        >
+                          Command slot
+                        </label>
+                        <select
+                          id={`command-${prompt.id}`}
+                          className="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                          value={prompt.commandId ?? ""}
                           onChange={(e) =>
                             updatePrompt(prompt.id, {
-                              secretMode: e.target.checked,
+                              commandId: e.target.value || undefined,
                             })
                           }
-                        />
-                        <label
-                          className="text-sm font-semibold text-slate-900"
-                          htmlFor={`secret-${prompt.id}`}
                         >
-                          Secret Mode
-                        </label>
+                          <option value="">Unassigned</option>
+                          {Array.from({ length: 10 }).map((_, i) => {
+                            const id = `run-prompt-${i + 1}`;
+                            return (
+                              <option key={id} value={id}>
+                                {id}
+                              </option>
+                            );
+                          })}
+                        </select>
+                        <div className="mt-2 text-xs text-slate-600">
+                          Assign this prompt to one of the predefined commands,
+                          then set a keyboard shortcut in{" "}
+                          <code>chrome://extensions/shortcuts</code>.
+                        </div>
                       </div>
+
+                      <div className="rounded-2xl border border-slate-200/70 bg-white/60 px-3 py-3 ring-1 ring-slate-900/5">
+                        <div className="flex items-center gap-2">
+                          <input
+                            id={`secret-${prompt.id}`}
+                            type="checkbox"
+                            checked={prompt.secretMode}
+                            onChange={(e) =>
+                              updatePrompt(prompt.id, {
+                                secretMode: e.target.checked,
+                              })
+                            }
+                          />
+                          <label
+                            className="text-sm font-semibold text-slate-900"
+                            htmlFor={`secret-${prompt.id}`}
+                          >
+                            Secret Mode
+                          </label>
+                        </div>
+                        <div className="mt-2 text-xs text-slate-600">
+                          When enabled, you can treat this prompt as sensitive
+                          (e.g. don’t log inputs / don’t show history).
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label
+                        className="mb-2 block text-sm font-semibold text-slate-900"
+                        htmlFor={`template-${prompt.id}`}
+                      >
+                        Prompt template
+                      </label>
+                      <textarea
+                        id={`template-${prompt.id}`}
+                        className="w-full rounded-2xl border border-slate-300/80 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                        rows={10}
+                        value={prompt.template}
+                        onChange={(e) =>
+                          updatePrompt(prompt.id, { template: e.target.value })
+                        }
+                      />
                       <div className="mt-2 text-xs text-slate-600">
-                        When enabled, you can treat this prompt as sensitive
-                        (e.g. don’t log inputs / don’t show history).
+                        Include <code>{TEMPLATE_PLACEHOLDER}</code> where the
+                        extra text should go.
                       </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </section>
 
-                  <div>
-                    <label
-                      className="mb-2 block text-sm font-semibold text-slate-900"
-                      htmlFor={`template-${prompt.id}`}
-                    >
-                      Prompt template
-                    </label>
-                    <textarea
-                      id={`template-${prompt.id}`}
-                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      rows={10}
-                      value={prompt.template}
-                      onChange={(e) =>
-                        updatePrompt(prompt.id, { template: e.target.value })
-                      }
-                    />
-                    <div className="mt-2 text-xs text-slate-600">
-                      Include <code>{TEMPLATE_PLACEHOLDER}</code> where the
-                      extra text should go.
+        <section className="mb-10">
+          <div className="text-lg font-bold text-slate-900">PDF Library</div>
+          <div className="mt-1 text-sm text-slate-600">
+            Upload PDFs to build a local knowledge base. We’ll extract text,
+            chunk it, generate embeddings, and retrieve relevant excerpts at
+            question time.
+          </div>
+
+          {!hasOpenRouterKey ? (
+            <div className="mt-3 rounded-2xl border border-slate-200/70 bg-white/70 px-4 py-3 text-sm text-slate-800 shadow-sm ring-1 ring-slate-900/5 backdrop-blur">
+              Add your <strong>OpenRouter API key</strong> above and click{" "}
+              <strong>Save</strong> to enable PDF indexing.
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex items-center gap-3">
+            <input
+              type="file"
+              accept="application/pdf"
+              multiple
+              disabled={!hasOpenRouterKey || ragBusy}
+              onChange={(e) => void onUploadPdf(e.target.files)}
+            />
+            {ragBusy ? (
+              <div className="text-sm text-slate-700">Working…</div>
+            ) : null}
+            {ragStatus ? (
+              <div className="text-sm text-slate-700">{ragStatus}</div>
+            ) : null}
+          </div>
+
+          {ragError ? (
+            <div className="mt-3 rounded-2xl border border-red-200 bg-red-50/70 px-4 py-3 text-sm text-red-800 shadow-sm ring-1 ring-red-900/5">
+              {ragError}
+            </div>
+          ) : null}
+
+          <div className="mt-4 space-y-2">
+            {ragDocs.length === 0 ? (
+              <div className="text-sm text-slate-600">No PDFs indexed yet.</div>
+            ) : (
+              ragDocs.map((d) => (
+                <div
+                  key={d.id}
+                  className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white/70 px-4 py-3 shadow-sm ring-1 ring-slate-900/5 backdrop-blur"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-slate-900">
+                      {d.name}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      {d.pageCount} pages • {d.chunkCount} chunks •{" "}
+                      {Math.round(d.byteSize / 1024)} KB • embed model:{" "}
+                      <code>{d.embeddingModel}</code>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-full bg-red-600 px-3 py-2 text-xs font-extrabold text-white hover:bg-red-700 disabled:opacity-50"
+                    disabled={ragBusy}
+                    onClick={() => void deletePdfDoc(d.id)}
+                  >
+                    Delete
+                  </button>
                 </div>
-              ))}
-            </div>
-          </>
-        ) : null}
-      </section>
-
-      <section className="mb-10">
-        <div className="text-lg font-bold text-slate-900">PDF Library</div>
-        <div className="mt-1 text-sm text-slate-600">
-          Upload PDFs to build a local knowledge base. We’ll extract text, chunk
-          it, generate embeddings, and retrieve relevant excerpts at question
-          time.
-        </div>
-
-        {!hasOpenRouterKey ? (
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800">
-            Add your <strong>OpenRouter API key</strong> above and click{" "}
-            <strong>Save</strong> to enable PDF indexing.
+              ))
+            )}
           </div>
+        </section>
+
+        {models.length ? (
+          <datalist id="openrouter-models">
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name ?? m.id}
+              </option>
+            ))}
+          </datalist>
         ) : null}
 
-        <div className="mt-4 flex items-center gap-3">
-          <input
-            type="file"
-            accept="application/pdf"
-            multiple
-            disabled={!hasOpenRouterKey || ragBusy}
-            onChange={(e) => void onUploadPdf(e.target.files)}
-          />
-          {ragBusy ? <div className="text-sm text-slate-700">Working…</div> : null}
-          {ragStatus ? <div className="text-sm text-slate-700">{ragStatus}</div> : null}
-        </div>
-
-        {ragError ? (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {ragError}
-          </div>
-        ) : null}
-
-        <div className="mt-4 space-y-2">
-          {ragDocs.length === 0 ? (
-            <div className="text-sm text-slate-600">No PDFs indexed yet.</div>
-          ) : (
-            ragDocs.map((d) => (
-              <div
-                key={d.id}
-                className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900">
-                    {d.name}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-600">
-                    {d.pageCount} pages • {d.chunkCount} chunks •{" "}
-                    {Math.round(d.byteSize / 1024)} KB • embed model:{" "}
-                    <code>{d.embeddingModel}</code>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-                  disabled={ragBusy}
-                  onClick={() => void deletePdfDoc(d.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-
-      {models.length ? (
-        <datalist id="openrouter-models">
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name ?? m.id}
-            </option>
-          ))}
-        </datalist>
-      ) : null}
-
-      <p className="mt-6 text-sm text-slate-600">
-        {dirty ? "You have unsaved changes." : "All changes saved."}
-      </p>
+        <p className="mt-6 text-sm text-slate-700">
+          {dirty ? "You have unsaved changes." : "All changes saved."}
+        </p>
+      </div>
     </div>
   );
 }

@@ -192,7 +192,7 @@ async function openRouterEmbeddings(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "X-Title": "Browse Assist",
+      "X-Title": "Lumpy",
     },
     body: JSON.stringify({
       model: EMBEDDING_MODEL,
@@ -230,7 +230,7 @@ async function openRouterChat(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "X-Title": "Browse Assist",
+      "X-Title": "Lumpy",
     },
     body: JSON.stringify({
       model,

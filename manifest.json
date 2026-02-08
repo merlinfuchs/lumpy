@@ -22,6 +22,12 @@
   },
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["https://openrouter.ai/*"],
+  "web_accessible_resources": [
+    {
+      "resources": ["static/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "commands": {
     "run-prompt-1": {
       "description": "Run prompt slot 01",
