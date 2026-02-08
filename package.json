@@ -16,7 +16,6 @@
     "pdfjs-dist": "^5.4.624",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-scripts": "5.0.1",
     "typescript": "^5.9.3",
     "web-vitals": "^2.1.4"
   },
@@ -27,12 +26,6 @@
     "build:firefox": "node scripts/build-firefox.mjs",
     "build-firefox": "npm run build:firefox",
     "watch": "webpack -w --config webpack.config.js"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
   },
   "browserslist": {
     "production": [
@@ -54,6 +47,7 @@
     "html-webpack-plugin": "^5.6.6",
     "postcss": "^8.5.6",
     "postcss-loader": "^8.2.0",
+    "style-loader": "^4.0.0",
     "tailwindcss": "^3.4.19",
     "ts-loader": "^9.5.4",
     "ts-node": "^10.9.2",
