@@ -7,7 +7,10 @@ export interface PromptConfig {
   model: string;
   template: string;
   secretMode: boolean;
-  keyboardShortcut: string;
+  // Command slot this prompt is bound to (e.g. "run-prompt-1")
+  commandId?: string;
+  // Legacy: previously used for on-page key listeners; no longer used.
+  keyboardShortcut?: string;
 }
 
 export interface ExtensionSettingsV2 {
@@ -30,7 +33,7 @@ const DEFAULT_SETTINGS: ExtensionSettingsV2 = {
         "User input:\n{{input}}\n\n" +
         "Response:",
       secretMode: false,
-      keyboardShortcut: "cmd+shift+p",
+      commandId: "run-prompt-1",
     },
   ],
 };
@@ -172,8 +175,9 @@ function normalizePrompt(value: unknown): PromptConfig | null {
     model: v.model,
     template: v.template,
     secretMode: v.secretMode,
+    commandId: typeof v.commandId === "string" ? v.commandId : undefined,
     keyboardShortcut:
-      typeof v.keyboardShortcut === "string" ? v.keyboardShortcut : "",
+      typeof v.keyboardShortcut === "string" ? v.keyboardShortcut : undefined,
   };
 }
 
@@ -663,27 +667,34 @@ export default function OptionsApp() {
                     <div>
                       <label
                         className="mb-2 block text-sm font-semibold text-slate-900"
-                        htmlFor={`shortcut-${prompt.id}`}
+                        htmlFor={`command-${prompt.id}`}
                       >
-                        Keyboard shortcut
+                        Command slot
                       </label>
-                      <input
-                        id={`shortcut-${prompt.id}`}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        type="text"
-                        placeholder='e.g. "Ctrl+Shift+P" or "Alt+K"'
-                        value={prompt.keyboardShortcut}
+                      <select
+                        id={`command-${prompt.id}`}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={prompt.commandId ?? ""}
                         onChange={(e) =>
                           updatePrompt(prompt.id, {
-                            keyboardShortcut: e.target.value,
+                            commandId: e.target.value || undefined,
                           })
                         }
-                      />
+                      >
+                        <option value="">Unassigned</option>
+                        {Array.from({ length: 10 }).map((_, i) => {
+                          const id = `run-prompt-${i + 1}`;
+                          return (
+                            <option key={id} value={id}>
+                              {id}
+                            </option>
+                          );
+                        })}
+                      </select>
                       <div className="mt-2 text-xs text-slate-600">
-                        Stored as a setting for the extension to interpret.
-                        (Chrome
-                        <code>commands</code> shortcuts must be declared in{" "}
-                        <code>manifest.json</code>.)
+                        Assign this prompt to one of the predefined commands,
+                        then set a keyboard shortcut in{" "}
+                        <code>chrome://extensions/shortcuts</code>.
                       </div>
                     </div>
 

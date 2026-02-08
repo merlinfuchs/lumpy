@@ -42,14 +42,20 @@ if (typeof compiledCss !== "string") {
   });
 }
 
-const mount = document.createElement("div");
-shadow.appendChild(mount);
+const MOUNT_ID = "browse-assist-mount";
+const existingMount = shadow.getElementById?.(MOUNT_ID) as HTMLElement | null;
+const mount = existingMount ?? document.createElement("div");
+mount.id = MOUNT_ID;
+if (!existingMount) shadow.appendChild(mount);
 
-ReactDOM.createRoot(mount).render(
+const anyMount = mount as any;
+const root = anyMount.__browseAssistRoot ?? ReactDOM.createRoot(mount);
+anyMount.__browseAssistRoot = root;
+
+root.render(
   <React.StrictMode>
     <ContentApp />
   </React.StrictMode>
 );
 
 export {};
-

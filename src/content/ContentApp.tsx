@@ -5,7 +5,8 @@ type PromptConfig = {
   model: string;
   template: string;
   secretMode: boolean;
-  keyboardShortcut: string;
+  commandId?: string;
+  keyboardShortcut?: string;
 };
 
 type ExtensionSettings = {
@@ -54,53 +55,6 @@ function normalizeSettings(result: Record<string, unknown>): ExtensionSettings {
 function getSelectedText(): string {
   const text = window.getSelection?.()?.toString?.() ?? "";
   return text.trim();
-}
-
-type ParsedShortcut = {
-  ctrl: boolean;
-  shift: boolean;
-  alt: boolean;
-  meta: boolean;
-  key: string; // normalized
-};
-
-function parseShortcut(raw: string): ParsedShortcut | null {
-  const s = raw.trim();
-  if (!s) return null;
-  const parts = s
-    .split("+")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (!parts.length) return null;
-
-  const out: ParsedShortcut = { ctrl: false, shift: false, alt: false, meta: false, key: "" };
-  for (const partRaw of parts) {
-    const part = partRaw.toLowerCase();
-    if (part === "ctrl" || part === "control") out.ctrl = true;
-    else if (part === "shift") out.shift = true;
-    else if (part === "alt" || part === "option") out.alt = true;
-    else if (
-      part === "cmd" ||
-      part === "command" ||
-      part === "meta" ||
-      part === "super"
-    )
-      out.meta = true;
-    else out.key = partRaw; // preserve case for special keys, normalize later
-  }
-  const key = out.key.trim();
-  if (!key) return null;
-  out.key = key.length === 1 ? key.toLowerCase() : key.toLowerCase();
-  return out;
-}
-
-function shortcutMatches(e: KeyboardEvent, s: ParsedShortcut): boolean {
-  if (!!e.ctrlKey !== s.ctrl) return false;
-  if (!!e.shiftKey !== s.shift) return false;
-  if (!!e.altKey !== s.alt) return false;
-  if (!!e.metaKey !== s.meta) return false;
-  const key = (e.key ?? "").toLowerCase();
-  return key === s.key;
 }
 
 type UiMode = "idle" | "awaiting_input" | "thinking" | "done" | "error";
@@ -205,14 +159,9 @@ export default function ContentApp() {
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
 
-  const shortcuts = useMemo(() => {
-    return settings.prompts
-      .map((p) => ({ prompt: p, parsed: parseShortcut(p.keyboardShortcut) }))
-      .filter((x) => x.parsed !== null) as { prompt: PromptConfig; parsed: ParsedShortcut }[];
-  }, [settings.prompts]);
-
   const runningRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const apiKeyRef = useRef<string>("");
 
   const hidePopup = () => {
     setVisible(false);
@@ -225,42 +174,46 @@ export default function ContentApp() {
 
   useEffect(() => {
     chrome.storage.sync.get(["openRouterApiKey", "prompts"], (result) => {
-      setSettings(normalizeSettings(result));
+      const next = normalizeSettings(result);
+      apiKeyRef.current = next.openRouterApiKey;
+      setSettings(next);
     });
 
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== "sync") return;
       if (changes.openRouterApiKey || changes.prompts) {
         chrome.storage.sync.get(["openRouterApiKey", "prompts"], (result) => {
-          setSettings(normalizeSettings(result));
+          const next = normalizeSettings(result);
+          apiKeyRef.current = next.openRouterApiKey;
+          setSettings(next);
         });
       }
     });
   }, []);
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      // ignore when typing in inputs/textareas/contenteditable
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase?.() ?? "";
-      const isTypingTarget =
-        tag === "input" ||
-        tag === "textarea" ||
-        (target as any)?.isContentEditable;
-      if (isTypingTarget) return;
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      const msg = message as any;
+      if (!msg || typeof msg.type !== "string") return;
 
-      for (const { prompt, parsed } of shortcuts) {
-        if (!shortcutMatches(e, parsed)) continue;
-        e.preventDefault();
-        e.stopPropagation();
-        void triggerPrompt(prompt);
-        break;
+      if (msg.type === "BROWSE_ASSIST_PING") {
+        sendResponse({ ok: true });
+        return;
       }
-    };
 
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [shortcuts]);
+      if (msg.type !== "RUN_PROMPT") return;
+      const prompt = msg.prompt as PromptConfig | undefined;
+      const apiKey = typeof msg.apiKey === "string" ? msg.apiKey : "";
+      if (apiKey) apiKeyRef.current = apiKey;
+      // Keep state in sync (async), but use the ref for immediate reads.
+      setSettings((prev) =>
+        apiKey ? { ...prev, openRouterApiKey: apiKey } : prev
+      );
+      if (prompt) {
+        void triggerPrompt(prompt);
+      }
+    });
+  }, []);
 
   const triggerPrompt = async (prompt: PromptConfig) => {
     // Secret mode should leave no visible UI footprint.
@@ -275,7 +228,8 @@ export default function ContentApp() {
     setAnswer("");
     setError("");
 
-    if (!settings.openRouterApiKey.trim()) {
+    const apiKey = apiKeyRef.current || settings.openRouterApiKey;
+    if (!apiKey.trim()) {
       setMode("error");
       setError("OpenRouter API key is not configured. Open settings to add it.");
       return;
@@ -292,10 +246,10 @@ export default function ContentApp() {
       return;
     }
 
-    await runPrompt(prompt, selected);
+    await runPrompt(prompt, selected, apiKey);
   };
 
-  const runPrompt = async (prompt: PromptConfig, input: string) => {
+  const runPrompt = async (prompt: PromptConfig, input: string, apiKey: string) => {
     if (runningRef.current) return;
     runningRef.current = true;
     setMode("thinking");
@@ -304,12 +258,12 @@ export default function ContentApp() {
 
     try {
       const promptText = await buildPromptWithPdfContext({
-        apiKey: settings.openRouterApiKey,
+        apiKey,
         template: prompt.template,
         input,
       });
       const res = await sendOpenRouterChat({
-        apiKey: settings.openRouterApiKey,
+        apiKey,
         model: prompt.model,
         prompt: promptText,
       });
@@ -327,7 +281,8 @@ export default function ContentApp() {
 
   const runSecretPrompt = async (prompt: PromptConfig) => {
     if (runningRef.current) return;
-    if (!settings.openRouterApiKey.trim()) {
+    const apiKey = apiKeyRef.current || settings.openRouterApiKey;
+    if (!apiKey.trim()) {
       window.alert(
         "Browse Assist: OpenRouter API key is not configured. Open the extension settings to add it."
       );
@@ -343,12 +298,12 @@ export default function ContentApp() {
     runningRef.current = true;
     try {
       const promptText = await buildPromptWithPdfContext({
-        apiKey: settings.openRouterApiKey,
+        apiKey,
         template: prompt.template,
         input: input.trim(),
       });
       const res = await sendOpenRouterChat({
-        apiKey: settings.openRouterApiKey,
+        apiKey,
         model: prompt.model,
         prompt: promptText,
       });
@@ -434,7 +389,8 @@ export default function ContentApp() {
                 disabled={!activePrompt || !inputText.trim()}
                 onClick={() => {
                   if (!activePrompt) return;
-                  void runPrompt(activePrompt, inputText.trim());
+                  const apiKey = apiKeyRef.current || settings.openRouterApiKey;
+                  void runPrompt(activePrompt, inputText.trim(), apiKey);
                 }}
               >
                 Run

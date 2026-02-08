@@ -35,4 +35,28 @@ declare const chrome: {
       addListener: (callback: () => void) => void;
     };
   };
+  commands: {
+    onCommand: {
+      addListener: (callback: (command: string) => void) => void;
+    };
+  };
+  tabs: {
+    query: (
+      queryInfo: { active?: boolean; currentWindow?: boolean },
+      callback: (tabs: Array<{ id?: number }>) => void
+    ) => void;
+    sendMessage: (
+      tabId: number,
+      message: unknown,
+      responseCallback?: (response: unknown) => void
+    ) => void;
+  };
+  scripting: {
+    executeScript: (details: {
+      target: { tabId: number };
+      files?: string[];
+      func?: (...args: any[]) => any;
+      args?: any[];
+    }) => Promise<unknown>;
+  };
 };

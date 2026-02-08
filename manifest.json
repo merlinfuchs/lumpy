@@ -13,13 +13,23 @@
     "page": "js/options.html",
     "open_in_tab": true
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["https://openrouter.ai/*"],
-  "content_scripts": [
-    {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["js/content.js"],
-      "run_at": "document_idle"
-    }
-  ]
+  "commands": {
+    "run-prompt-1": {
+      "description": "Run prompt slot 01",
+      "suggested_key": {
+        "default": "Ctrl+Shift+P"
+      }
+    },
+    "run-prompt-2": { "description": "Run prompt slot 02" },
+    "run-prompt-3": { "description": "Run prompt slot 03" },
+    "run-prompt-4": { "description": "Run prompt slot 04" },
+    "run-prompt-5": { "description": "Run prompt slot 05" },
+    "run-prompt-6": { "description": "Run prompt slot 06" },
+    "run-prompt-7": { "description": "Run prompt slot 07" },
+    "run-prompt-8": { "description": "Run prompt slot 8" },
+    "run-prompt-9": { "description": "Run prompt slot 09" },
+    "run-prompt-10": { "description": "Run prompt slot 10" }
+  }
 }
