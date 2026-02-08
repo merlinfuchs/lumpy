@@ -50,6 +50,7 @@ Build output is written to `dist/`.
 ## Scripts
 
 - `npm run build`: production build to `dist/`
+- `npm run build:firefox`: builds and creates `artifacts/lumpy-firefox.zip` (requires `FIREFOX_GECKO_ID`)
 - `npm run watch`: rebuild on changes
 
 ## Privacy
@@ -66,11 +67,11 @@ This repo includes a workflow that builds `dist/`, packages it, and publishes to
 ### Triggers
 
 - **Automatic**: when a GitHub Release is published
-- **Manual**: via *Actions → Publish to Chrome + Firefox Stores*
+- **Manual**: via _Actions → Publish to Chrome + Firefox Stores_
 
 ### Required GitHub Secrets
 
-Set these in *Repo → Settings → Secrets and variables → Actions → Secrets*:
+Set these in _Repo → Settings → Secrets and variables → Actions → Secrets_:
 
 #### Chrome Web Store
 
