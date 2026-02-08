@@ -18,6 +18,13 @@ chrome.action.onClicked.addListener(() => {
   chrome.runtime.openOptionsPage();
 });
 
+// Open the options page on first install so users can set their API key.
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install") {
+    chrome.runtime.openOptionsPage();
+  }
+});
+
 function storageGet(keys: string[]): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
     chrome.storage.sync.get(keys, (result) => resolve(result));

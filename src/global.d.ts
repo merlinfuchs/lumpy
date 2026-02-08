@@ -20,6 +20,15 @@ declare const chrome: {
       message: unknown,
       responseCallback?: (response: unknown) => void
     ) => void;
+    onInstalled: {
+      addListener: (
+        callback: (details: {
+          reason: "install" | "update" | "chrome_update" | "shared_module_update";
+          previousVersion?: string;
+          id?: string;
+        }) => void
+      ) => void;
+    };
     onMessage: {
       addListener: (
         callback: (
