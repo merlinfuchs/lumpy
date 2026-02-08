@@ -27,7 +27,7 @@ Lumpy is a fun, lightweight browser extension that helps you understand what you
 - Click **Load unpacked**
 - Select the `dist/` folder
 
-### Load in Firefox (temporary add-on)
+### Load in Firefox (untested)
 
 - Open `about:debugging#/runtime/this-firefox`
 - Click **Load Temporary Add-on…**

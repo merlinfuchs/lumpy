@@ -1,6 +1,6 @@
 {
   "name": "browse-assist",
-  "version": "0.1.0",
+  "version": "1.0.1",
   "private": true,
   "dependencies": {
     "@openrouter/sdk": "^0.8.0",
