@@ -3,6 +3,11 @@ name: Build release artifacts (Chrome + Firefox)
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag / release tag to upload assets to (e.g. v1.0.1)"
+        required: true
 
 jobs:
   build-and-upload:
@@ -22,10 +27,20 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm --version
+          npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 
       - name: Install zip
         run: sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Determine release tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_TAG=${{ inputs.tag }}" >> "$GITHUB_ENV"
+          fi
 
       - name: Build once
         run: npm run build
@@ -38,6 +53,7 @@ jobs:
       - name: Upload artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: |
             artifacts/lumpy-chrome.zip
             artifacts/lumpy-firefox.zip

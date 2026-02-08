@@ -13,16 +13,12 @@ Lumpy is a fun, lightweight browser extension that helps you understand what you
 - **Custom prompts**: configure multiple prompt slots, pick models, and edit templates.
 - **Optional PDF Library**: upload PDFs, index them locally, and retrieve relevant excerpts when asking questions.
 
-## Setup (development / unpacked)
+## Install from Release
 
-### Build
+### Download from Release
 
-```bash
-npm ci
-npm run build
-```
-
-Build output is written to `dist/`.
+- Download the latest release from [the releases page](https://github.com/merlin-gg/lumpy/releases)
+- Extract the zip file
 
 ### Load in Chrome / Chromium
 
@@ -39,7 +35,9 @@ Build output is written to `dist/`.
 
 ## Using Lumpy
 
-- Open the extension **Options/Settings** page and add your **OpenRouter API key**
+- Signup for an [OpenRouter API key](https://openrouter.ai)
+- Add payment method to your OpenRouter account
+- Click on the extension icon in the toolbar and add your **OpenRouter API key**
 - Assign prompt slots to commands, then set keyboard shortcuts in:
   - Chrome: `chrome://extensions/shortcuts`
 - On any webpage:
@@ -47,7 +45,18 @@ Build output is written to `dist/`.
   - Run your configured shortcut
   - Read the answer in the on-page popup
 
-## Scripts
+## Development
+
+### Build
+
+```bash
+npm ci
+npm run build
+```
+
+Build output is written to `dist/`.
+
+### Scripts
 
 - `npm run build`: production build to `dist/`
 - `npm run build:chrome` (or `npm run build-chrome`): builds and creates `artifacts/lumpy-chrome.zip`
@@ -56,33 +65,4 @@ Build output is written to `dist/`.
 
 ## Privacy
 
-See `PRIVACY.md`.
-
-## Store publishing (GitHub Actions)
-
-This repo includes a workflow that builds `dist/`, packages it, and publishes to:
-
-- **Chrome Web Store** (upload + publish)
-- **Firefox AMO** (submit/sign via `web-ext sign`)
-
-### Triggers
-
-- **Automatic**: when a GitHub Release is published
-- **Manual**: via _Actions → Publish to Chrome + Firefox Stores_
-
-### Required GitHub Secrets
-
-Set these in _Repo → Settings → Secrets and variables → Actions → Secrets_:
-
-#### Chrome Web Store
-
-- `CHROME_EXTENSION_ID`
-- `CHROME_CLIENT_ID`
-- `CHROME_CLIENT_SECRET`
-- `CHROME_REFRESH_TOKEN`
-
-#### Firefox AMO
-
-- `FIREFOX_JWT_ISSUER`
-- `FIREFOX_JWT_SECRET`
-- `FIREFOX_GECKO_ID` (the add-on ID, e.g. `lumpy@example.com` or a UUID)
+See [PRIVACY.md](PRIVACY.md).
