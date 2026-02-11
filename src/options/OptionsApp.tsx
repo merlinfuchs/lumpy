@@ -8,8 +8,8 @@ export interface PromptConfig {
   template: string;
   // Compatibility mode: use standard browser popups (alert, prompt) instead of custom one
   compatMode: boolean;
-  // Whether to always prompt for additional input or only use selected text and fallback to prompt when no text is selected
-  promptMode: "prompt" | "select";
+  // How to gather input: selection / area screenshot, and whether to prompt for extra context.
+  promptMode: "select-prompt" | "select" | "area-prompt" | "area";
   // Whether to show the answer in a popup, copy to clipboard, or both
   answerMode: "popup" | "clipboard" | "popup-clipboard";
   // Command slot this prompt is bound to (e.g. "run-prompt-1")
@@ -38,7 +38,7 @@ const DEFAULT_SETTINGS: ExtensionSettingsV2 = {
         "User input:\n{{input}}\n\n" +
         "Response:",
       compatMode: false,
-      promptMode: "prompt",
+      promptMode: "select-prompt",
       answerMode: "popup",
       commandId: "run-prompt-1",
     },
@@ -167,7 +167,7 @@ function makeId(): string {
     .slice(2, 10)}`;
 }
 
-const PROMPT_MODES = ["prompt", "select"] as const;
+const PROMPT_MODES = ["select-prompt", "select", "area-prompt", "area"] as const;
 const ANSWER_MODES = ["popup", "clipboard", "popup-clipboard"] as const;
 
 function normalizePrompt(value: unknown): PromptConfig | null {
@@ -182,17 +182,28 @@ function normalizePrompt(value: unknown): PromptConfig | null {
     return null;
   }
 
-  // Migrate legacy stealthMode to answerMode + promptMode
-  let promptMode: "prompt" | "select" = "prompt";
+  // Migrate legacy stealthMode + legacy promptMode values
+  let promptMode: "select-prompt" | "select" | "area-prompt" | "area" =
+    "select-prompt";
   let answerMode: "popup" | "clipboard" | "popup-clipboard" = "popup";
   if (typeof v.answerMode === "string" && ANSWER_MODES.includes(v.answerMode as any)) {
     answerMode = v.answerMode as "popup" | "clipboard" | "popup-clipboard";
   } else if (v.stealthMode === true) {
     answerMode = "clipboard";
-    promptMode = "select";
+    promptMode = "select"; // legacy stealth: selection-only, no prompting
   }
-  if (typeof v.promptMode === "string" && PROMPT_MODES.includes(v.promptMode as any)) {
-    promptMode = v.promptMode as "prompt" | "select";
+  if (typeof v.promptMode === "string") {
+    if (PROMPT_MODES.includes(v.promptMode as any)) {
+      promptMode = v.promptMode as any;
+    } else if (v.promptMode === "prompt") {
+      promptMode = "select-prompt";
+    } else if (v.promptMode === "select") {
+      // legacy select used fallback prompt when nothing selected
+      promptMode = "select-prompt";
+    } else if (v.promptMode === "area") {
+      // legacy area showed optional context UI
+      promptMode = "area-prompt";
+    }
   }
 
   return {
@@ -405,7 +416,7 @@ export default function OptionsApp() {
         `User input:\n${TEMPLATE_PLACEHOLDER}\n\n` +
         "Response:",
       compatMode: false,
-      promptMode: "prompt",
+      promptMode: "select-prompt",
       answerMode: "popup",
       keyboardShortcut: "",
     };
@@ -776,15 +787,21 @@ export default function OptionsApp() {
                             value={prompt.promptMode}
                             onChange={(e) =>
                               updatePrompt(prompt.id, {
-                                promptMode: e.target.value as "prompt" | "select",
+                                promptMode: e.target.value as
+                                  | "select-prompt"
+                                  | "select"
+                                  | "area-prompt"
+                                  | "area",
                               })
                             }
                           >
-                            <option value="prompt">Always prompt for additional input</option>
-                            <option value="select">Only use selected text; prompt only when nothing is selected</option>
+                            <option value="select-prompt">Select + Prompt</option>
+                            <option value="select">Only Select</option>
+                            <option value="area-prompt">Area + Prompt</option>
+                            <option value="area">Only Area Selection</option>
                           </select>
                           <div className="mt-2 text-xs text-slate-600">
-                            Controls whether you always see an input step or only when no text is selected.
+                            Choose between selecting text, selecting an area screenshot, and whether to prompt for extra context.
                           </div>
                         </div>
 

@@ -36,13 +36,13 @@ type StoredPrompt = {
   model: string;
   template: string;
   compatMode: boolean;
-  promptMode: "prompt" | "select";
+  promptMode: "select-prompt" | "select" | "area-prompt" | "area";
   answerMode: "popup" | "clipboard" | "popup-clipboard";
   commandId?: string;
 };
 
 const ANSWER_MODES = ["popup", "clipboard", "popup-clipboard"] as const;
-const PROMPT_MODES = ["prompt", "select"] as const;
+const PROMPT_MODES = ["select-prompt", "select", "area-prompt", "area"] as const;
 
 function normalizeStoredPrompt(value: unknown): StoredPrompt | null {
   if (!value || typeof value !== "object") return null;
@@ -55,16 +55,27 @@ function normalizeStoredPrompt(value: unknown): StoredPrompt | null {
   ) {
     return null;
   }
-  let promptMode: "prompt" | "select" = "prompt";
+  let promptMode: "select-prompt" | "select" | "area-prompt" | "area" =
+    "select-prompt";
   let answerMode: "popup" | "clipboard" | "popup-clipboard" = "popup";
   if (typeof v.answerMode === "string" && ANSWER_MODES.includes(v.answerMode as any)) {
     answerMode = v.answerMode as "popup" | "clipboard" | "popup-clipboard";
   } else if (v.stealthMode === true) {
     answerMode = "clipboard";
-    promptMode = "select";
+    promptMode = "select"; // legacy stealth: selection-only, no prompting
   }
-  if (typeof v.promptMode === "string" && PROMPT_MODES.includes(v.promptMode as any)) {
-    promptMode = v.promptMode as "prompt" | "select";
+  if (typeof v.promptMode === "string") {
+    if (PROMPT_MODES.includes(v.promptMode as any)) {
+      promptMode = v.promptMode as any;
+    } else if (v.promptMode === "prompt") {
+      promptMode = "select-prompt";
+    } else if (v.promptMode === "select") {
+      // legacy select used fallback prompt when nothing selected
+      promptMode = "select-prompt";
+    } else if (v.promptMode === "area") {
+      // legacy area showed optional context UI
+      promptMode = "area-prompt";
+    }
   }
   return {
     id: v.id,
@@ -143,10 +154,22 @@ type OpenRouterChatRequest = {
   apiKey: string;
   model: string;
   prompt: string;
+  // Optional multimodal image (data URL), e.g. "data:image/png;base64,..."
+  imageDataUrl?: string;
 };
 
 type OpenRouterChatResponse =
   | { ok: true; text: string }
+  | { ok: false; error: string };
+
+type CaptureVisibleTabRequest = {
+  type: "CAPTURE_VISIBLE_TAB";
+  format?: "png" | "jpeg";
+  quality?: number; // only used for jpeg
+};
+
+type CaptureVisibleTabResponse =
+  | { ok: true; dataUrl: string }
   | { ok: false; error: string };
 
 type RagIndexRequest = {
@@ -203,10 +226,37 @@ type RagSearchResponse =
 
 type AnyRequest =
   | OpenRouterChatRequest
+  | CaptureVisibleTabRequest
   | RagIndexRequest
   | RagListDocsRequest
   | RagDeleteDocRequest
   | RagSearchRequest;
+
+function captureVisibleTab(args: {
+  windowId?: number;
+  format?: "png" | "jpeg";
+  quality?: number;
+}): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const format = args.format ?? "png";
+    const options: any = { format };
+    if (format === "jpeg" && typeof args.quality === "number") {
+      options.quality = Math.max(0, Math.min(100, Math.round(args.quality)));
+    }
+    (chrome.tabs as any).captureVisibleTab(
+      args.windowId,
+      options,
+      (dataUrl: string) => {
+      const err = (chrome.runtime as any).lastError as
+        | { message?: string }
+        | undefined;
+      if (err) return reject(new Error(err.message || "captureVisibleTab failed"));
+      if (!dataUrl) return reject(new Error("captureVisibleTab returned empty data"));
+      resolve(dataUrl);
+      }
+    );
+  });
+}
 
 async function openRouterEmbeddings(
   apiKey: string,
@@ -248,8 +298,17 @@ async function openRouterEmbeddings(
 async function openRouterChat(
   apiKey: string,
   model: string,
-  prompt: string
+  prompt: string,
+  imageDataUrl?: string
 ): Promise<string> {
+  const text = (prompt ?? "").trim() || " ";
+  const messageContent = imageDataUrl
+    ? ([
+        { type: "text", text },
+        { type: "image_url", image_url: { url: imageDataUrl } },
+      ] as any)
+    : text;
+
   const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -259,7 +318,7 @@ async function openRouterChat(
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content: messageContent }],
     }),
   });
 
@@ -293,8 +352,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             error: "Missing apiKey/model/prompt",
           } satisfies OpenRouterChatResponse;
         }
-        const text = await openRouterChat(m.apiKey, m.model, m.prompt);
+        const text = await openRouterChat(
+          m.apiKey,
+          m.model,
+          m.prompt,
+          m.imageDataUrl
+        );
         return { ok: true, text } satisfies OpenRouterChatResponse;
+      }
+
+      case "CAPTURE_VISIBLE_TAB": {
+        const m = msg as CaptureVisibleTabRequest;
+        const windowId =
+          typeof (_sender as any)?.tab?.windowId === "number"
+            ? ((_sender as any).tab.windowId as number)
+            : undefined;
+        const dataUrl = await captureVisibleTab({
+          windowId,
+          format: m.format,
+          quality: m.quality,
+        });
+        return { ok: true, dataUrl } satisfies CaptureVisibleTabResponse;
       }
 
       case "RAG_LIST_DOCUMENTS": {

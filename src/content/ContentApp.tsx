@@ -11,7 +11,7 @@ type PromptConfig = {
   model: string;
   template: string;
   compatMode: boolean;
-  promptMode: "prompt" | "select";
+  promptMode: "select-prompt" | "select" | "area-prompt" | "area";
   answerMode: "popup" | "clipboard" | "popup-clipboard";
   commandId?: string;
   keyboardShortcut?: string;
@@ -25,7 +25,7 @@ type ExtensionSettings = {
 const TEMPLATE_PLACEHOLDER = "{{input}}";
 
 const ANSWER_MODES = ["popup", "clipboard", "popup-clipboard"] as const;
-const PROMPT_MODES = ["prompt", "select"] as const;
+const PROMPT_MODES = ["select-prompt", "select", "area-prompt", "area"] as const;
 
 function normalizePrompt(value: unknown): PromptConfig | null {
   if (!value || typeof value !== "object") return null;
@@ -38,7 +38,8 @@ function normalizePrompt(value: unknown): PromptConfig | null {
   ) {
     return null;
   }
-  let promptMode: "prompt" | "select" = "prompt";
+  let promptMode: "select-prompt" | "select" | "area-prompt" | "area" =
+    "select-prompt";
   let answerMode: "popup" | "clipboard" | "popup-clipboard" = "popup";
   if (
     typeof v.answerMode === "string" &&
@@ -47,13 +48,20 @@ function normalizePrompt(value: unknown): PromptConfig | null {
     answerMode = v.answerMode as "popup" | "clipboard" | "popup-clipboard";
   } else if (v.stealthMode === true) {
     answerMode = "clipboard";
-    promptMode = "select";
+    promptMode = "select"; // legacy stealth: selection-only, no prompting
   }
-  if (
-    typeof v.promptMode === "string" &&
-    PROMPT_MODES.includes(v.promptMode as any)
-  ) {
-    promptMode = v.promptMode as "prompt" | "select";
+  if (typeof v.promptMode === "string") {
+    if (PROMPT_MODES.includes(v.promptMode as any)) {
+      promptMode = v.promptMode as any;
+    } else if (v.promptMode === "prompt") {
+      promptMode = "select-prompt";
+    } else if (v.promptMode === "select") {
+      // legacy select used fallback prompt when nothing selected
+      promptMode = "select-prompt";
+    } else if (v.promptMode === "area") {
+      // legacy area showed optional context UI
+      promptMode = "area-prompt";
+    }
   }
   return {
     id: v.id,
@@ -87,6 +95,125 @@ function getSelectedText(): string {
   return text.trim();
 }
 
+type Rect = { x: number; y: number; width: number; height: number };
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+async function cropDataUrlToRect(args: {
+  dataUrl: string;
+  rect: Rect; // viewport CSS pixels
+}): Promise<string> {
+  const dpr = window.devicePixelRatio || 1;
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error("Failed to load screenshot image"));
+    im.src = args.dataUrl;
+  });
+
+  const sx = Math.round(args.rect.x * dpr);
+  const sy = Math.round(args.rect.y * dpr);
+  const sw = Math.round(args.rect.width * dpr);
+  const sh = Math.round(args.rect.height * dpr);
+
+  const x = clamp(sx, 0, img.width);
+  const y = clamp(sy, 0, img.height);
+  const w = clamp(sw, 1, img.width - x);
+  const h = clamp(sh, 1, img.height - y);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No canvas context");
+  ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+  return canvas.toDataURL("image/png");
+}
+
+function pickAreaRect(): Promise<Rect | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "2147483647";
+    overlay.style.cursor = "crosshair";
+    overlay.style.background = "rgba(0,0,0,0.02)";
+
+    const makeDot = (x: number, y: number) => {
+      const dot = document.createElement("div");
+      dot.style.position = "absolute";
+      dot.style.left = `${x - 5}px`;
+      dot.style.top = `${y - 5}px`;
+      dot.style.width = "10px";
+      dot.style.height = "10px";
+      dot.style.borderRadius = "9999px";
+      dot.style.background = "rgba(217, 70, 239, 0.95)"; // fuchsia-ish
+      dot.style.boxShadow = "0 0 0 2px rgba(255,255,255,0.9)";
+      overlay.appendChild(dot);
+    };
+
+    const rectEl = document.createElement("div");
+    rectEl.style.position = "absolute";
+    rectEl.style.border = "2px solid rgba(99, 102, 241, 0.9)";
+    rectEl.style.background = "rgba(99, 102, 241, 0.12)";
+    rectEl.style.pointerEvents = "none";
+    rectEl.style.display = "none";
+    overlay.appendChild(rectEl);
+
+    let p1: { x: number; y: number } | null = null;
+
+    const cleanup = () => {
+      overlay.remove();
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cleanup();
+        resolve(null);
+      }
+    };
+
+    const onClick = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const x = e.clientX;
+      const y = e.clientY;
+      if (!p1) {
+        p1 = { x, y };
+        makeDot(x, y);
+        return;
+      }
+
+      makeDot(x, y);
+      const x1 = Math.min(p1.x, x);
+      const y1 = Math.min(p1.y, y);
+      const x2 = Math.max(p1.x, x);
+      const y2 = Math.max(p1.y, y);
+      const width = Math.max(1, x2 - x1);
+      const height = Math.max(1, y2 - y1);
+      rectEl.style.left = `${x1}px`;
+      rectEl.style.top = `${y1}px`;
+      rectEl.style.width = `${width}px`;
+      rectEl.style.height = `${height}px`;
+      rectEl.style.display = "block";
+
+      // Resolve on next tick so the user briefly sees the rectangle.
+      setTimeout(() => {
+        cleanup();
+        resolve({ x: x1, y: y1, width, height });
+      }, 0);
+    };
+
+    overlay.addEventListener("click", onClick, true);
+    window.addEventListener("keydown", onKeyDown, true);
+    document.documentElement.appendChild(overlay);
+  });
+}
+
 type UiMode = "idle" | "awaiting_input" | "thinking" | "done" | "error";
 
 function fillTemplate(template: string, input: string): string {
@@ -110,6 +237,10 @@ type RagSearchResponse =
   | { ok: true; hits: RagSearchHit[] }
   | { ok: false; error: string };
 
+type CaptureVisibleTabResponse =
+  | { ok: true; dataUrl: string }
+  | { ok: false; error: string };
+
 function sendRagSearch(request: {
   apiKey: string;
   query: string;
@@ -120,6 +251,21 @@ function sendRagSearch(request: {
       resolve(response as RagSearchResponse)
     );
   });
+}
+
+function sendMessage<TResponse>(message: unknown): Promise<TResponse> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => resolve(response as any));
+  });
+}
+
+async function captureVisibleTabDataUrl(): Promise<string> {
+  const res = await sendMessage<CaptureVisibleTabResponse>({
+    type: "CAPTURE_VISIBLE_TAB",
+    format: "png",
+  });
+  if (!res.ok) throw new Error(res.error);
+  return res.dataUrl;
 }
 
 function formatPdfContext(hits: RagSearchHit[]): string {
@@ -167,6 +313,7 @@ function sendOpenRouterChat(request: {
   apiKey: string;
   model: string;
   prompt: string;
+  imageDataUrl?: string;
 }): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage(
@@ -192,6 +339,7 @@ export default function ContentApp() {
   const [inputText, setInputText] = useState("");
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
+  const [areaImageDataUrl, setAreaImageDataUrl] = useState<string | null>(null);
 
   const runningRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -207,6 +355,7 @@ export default function ContentApp() {
     setInputText("");
     setAnswer("");
     setError("");
+    setAreaImageDataUrl(null);
   }, []);
 
   useEffect(() => {
@@ -292,9 +441,60 @@ export default function ContentApp() {
       return;
     }
 
+    // Area screenshot modes: pick a rectangle first.
+    if (prompt.promptMode === "area" || prompt.promptMode === "area-prompt") {
+      hidePopup();
+
+      if (!apiKey.trim()) {
+        setVisible(true);
+        setActivePrompt(prompt);
+        setMode("error");
+        setError(
+          "OpenRouter API key is not configured. Open settings to add it."
+        );
+        return;
+      }
+
+      try {
+        const rect = await pickAreaRect();
+        if (!rect) return;
+        const full = await captureVisibleTabDataUrl();
+        const cropped = await cropDataUrlToRect({ dataUrl: full, rect });
+
+        // Only Area Selection: run immediately (no prompt for context).
+        if (prompt.promptMode === "area") {
+          setVisible(true);
+          setActivePrompt(prompt);
+          setAreaImageDataUrl(cropped);
+          setAnswer("");
+          setError("");
+          setMode("thinking");
+          await runPrompt(prompt, "", apiKey, { imageDataUrl: cropped });
+          return;
+        }
+
+        // Area + Prompt: open popup to add optional context text.
+        setVisible(true);
+        setActivePrompt(prompt);
+        setAreaImageDataUrl(cropped);
+        setAnswer("");
+        setError("");
+        setMode("awaiting_input");
+        setInputText("");
+        setTimeout(() => textareaRef.current?.focus(), 100);
+      } catch (e) {
+        setVisible(true);
+        setActivePrompt(prompt);
+        setMode("error");
+        setError(e instanceof Error ? e.message : String(e));
+      }
+      return;
+    }
+
     // Show custom popup for input and/or answer.
     setVisible(true);
     setActivePrompt(prompt);
+    setAreaImageDataUrl(null);
     setAnswer("");
     setError("");
 
@@ -309,26 +509,34 @@ export default function ContentApp() {
     if (runningRef.current) return;
 
     const selected = getSelectedText();
-    const useSelectionOnly = prompt.promptMode === "select";
-
-    if (useSelectionOnly && selected.trim()) {
-      // Use selection only (no input step).
-      await runPrompt(prompt, selected.trim(), apiKey);
+    if (prompt.promptMode === "select") {
+      if (selected.trim()) {
+        await runPrompt(prompt, selected.trim(), apiKey);
+        return;
+      }
+      setMode("error");
+      setError(
+        "No text selected. Select text and try again, or switch to Select + Prompt."
+      );
       return;
     }
 
-    // Show input step:
-    // - promptMode === "prompt": always show (prefill with selection so users can add more)
-    // - promptMode === "select": only when nothing is selected
-    setMode("awaiting_input");
-    setInputText(useSelectionOnly ? "" : selected);
-    setTimeout(() => textareaRef.current?.focus(), 100);
+    if (prompt.promptMode === "select-prompt") {
+      setMode("awaiting_input");
+      setInputText(selected);
+      setTimeout(() => textareaRef.current?.focus(), 100);
+      return;
+    }
+
+    setMode("error");
+    setError("Unknown prompt mode.");
   };
 
   const runPrompt = async (
     prompt: PromptConfig,
     input: string,
-    apiKey: string
+    apiKey: string,
+    opts?: { imageDataUrl?: string }
   ) => {
     if (runningRef.current) return;
     runningRef.current = true;
@@ -340,12 +548,13 @@ export default function ContentApp() {
       const promptText = await buildPromptWithPdfContext({
         apiKey,
         template: prompt.template,
-        input,
+        input: input.trim() || (opts?.imageDataUrl ? "Screenshot attached." : ""),
       });
       const res = await sendOpenRouterChat({
         apiKey,
         model: prompt.model,
         prompt: promptText,
+        imageDataUrl: opts?.imageDataUrl,
       });
       if (!res.ok) {
         setMode("error");
@@ -401,22 +610,69 @@ export default function ContentApp() {
       return;
     }
 
+    if (prompt.promptMode === "area" || prompt.promptMode === "area-prompt") {
+      const rect = await pickAreaRect();
+      if (!rect) return;
+      const full = await captureVisibleTabDataUrl();
+      const cropped = await cropDataUrlToRect({ dataUrl: full, rect });
+
+      const input =
+        prompt.promptMode === "area-prompt"
+          ? (
+              window.prompt(
+                "Lumpy (Compatibility): Add context (optional)",
+                ""
+              ) ?? ""
+            ).trim()
+          : "";
+
+      runningRef.current = true;
+      try {
+        const promptText = await buildPromptWithPdfContext({
+          apiKey,
+          template: prompt.template,
+          input: input || "Screenshot attached.",
+        });
+        const res = await sendOpenRouterChat({
+          apiKey,
+          model: prompt.model,
+          prompt: promptText,
+          imageDataUrl: cropped,
+        });
+        if (!res.ok) {
+          window.alert(`Lumpy (Compatibility Mode) error: ${res.error}`);
+          return;
+        }
+
+        const showPopup =
+          prompt.answerMode === "popup" || prompt.answerMode === "popup-clipboard";
+        const copyToClipboard =
+          prompt.answerMode === "clipboard" ||
+          prompt.answerMode === "popup-clipboard";
+        if (showPopup) window.alert(res.text);
+        if (copyToClipboard) copyToClipboardBestEffort(res.text);
+      } catch (err) {
+        window.alert(
+          `Lumpy (Compatibility Mode) error: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      } finally {
+        runningRef.current = false;
+      }
+      return;
+    }
+
     const selected = getSelectedText();
     let input: string;
     if (prompt.promptMode === "select") {
-      if (selected.trim()) {
-        input = selected.trim();
-      } else {
-        const prompted =
-          window.prompt(
-            "Lumpy (Compatibility): No selection — enter input",
-            ""
-          ) ?? "";
-        if (!prompted.trim()) return;
-        input = prompted.trim();
+      if (!selected.trim()) {
+        window.alert("Lumpy (Compatibility): No text selected.");
+        return;
       }
+      input = selected.trim();
     } else {
-      // Always prompt: prefill with selection so user can add or edit (selection + additional input)
+      // Select + Prompt: always prompt (prefill with selection so user can add/edit)
       const prompted =
         window.prompt(
           "Lumpy (Compatibility): Enter or add to input",
@@ -470,13 +726,44 @@ export default function ContentApp() {
     if (runningRef.current) return;
     if (!apiKey.trim()) return;
 
+    if (prompt.promptMode === "area" || prompt.promptMode === "area-prompt") {
+      const rect = await pickAreaRect();
+      if (!rect) return;
+      const full = await captureVisibleTabDataUrl();
+      const cropped = await cropDataUrlToRect({ dataUrl: full, rect });
+      const input =
+        prompt.promptMode === "area-prompt"
+          ? (window.prompt("Lumpy: Add context (optional)", "") ?? "").trim()
+          : "";
+
+      runningRef.current = true;
+      try {
+        const promptText = await buildPromptWithPdfContext({
+          apiKey,
+          template: prompt.template,
+          input: input || "Screenshot attached.",
+        });
+        const res = await sendOpenRouterChat({
+          apiKey,
+          model: prompt.model,
+          prompt: promptText,
+          imageDataUrl: cropped,
+        });
+        if (!res.ok) return;
+        copyToClipboardBestEffort(res.text);
+      } finally {
+        runningRef.current = false;
+      }
+      return;
+    }
+
     const selected = getSelectedText();
     let input: string;
     if (prompt.promptMode === "select") {
       if (!selected.trim()) return;
       input = selected.trim();
     } else {
-      // Always prompt: prefill with selection so user can add or edit (selection + additional input)
+      // Select + Prompt: always prompt (prefill with selection so user can add/edit)
       const prompted =
         window.prompt(
           "Lumpy: Enter or add to input (clipboard-only mode)",
@@ -554,10 +841,21 @@ export default function ContentApp() {
         {mode === "awaiting_input" ? (
           <div className="space-y-2">
             <div className="text-xs text-slate-700">
-              {inputText.trim()
-                ? "Selection + additional input (edit as needed):"
-                : "No text selected — enter input:"}
+              {areaImageDataUrl
+                ? "Screenshot selected — add context (optional):"
+                : inputText.trim()
+                  ? "Selection + additional input (edit as needed):"
+                  : "No text selected — enter input:"}
             </div>
+            {areaImageDataUrl ? (
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                <img
+                  src={areaImageDataUrl}
+                  alt="Selected area screenshot"
+                  className="block w-full"
+                />
+              </div>
+            ) : null}
             <textarea
               ref={textareaRef}
               className="w-full rounded-2xl border border-slate-300/80 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
@@ -570,8 +868,10 @@ export default function ContentApp() {
                 e.preventDefault(); // Enter submits
                 if (!activePrompt) return;
                 const apiKey = apiKeyRef.current || settings.openRouterApiKey;
-                if (!inputText.trim()) return;
-                void runPrompt(activePrompt, inputText.trim(), apiKey);
+                if (!inputText.trim() && !areaImageDataUrl) return;
+                void runPrompt(activePrompt, inputText.trim(), apiKey, {
+                  imageDataUrl: areaImageDataUrl ?? undefined,
+                });
               }}
               placeholder="Type input to inject into {{input}}…"
             />
@@ -586,11 +886,13 @@ export default function ContentApp() {
               <button
                 type="button"
                 className="rounded-full bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 px-3 py-2 text-xs font-extrabold text-white shadow-sm ring-1 ring-black/5 hover:from-fuchsia-500 hover:via-purple-500 hover:to-indigo-500 disabled:opacity-50"
-                disabled={!activePrompt || !inputText.trim()}
+                disabled={!activePrompt || (!inputText.trim() && !areaImageDataUrl)}
                 onClick={() => {
                   if (!activePrompt) return;
                   const apiKey = apiKeyRef.current || settings.openRouterApiKey;
-                  void runPrompt(activePrompt, inputText.trim(), apiKey);
+                  void runPrompt(activePrompt, inputText.trim(), apiKey, {
+                    imageDataUrl: areaImageDataUrl ?? undefined,
+                  });
                 }}
               >
                 Run
