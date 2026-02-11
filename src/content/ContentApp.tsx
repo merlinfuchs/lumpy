@@ -832,7 +832,7 @@ export default function ContentApp() {
   return (
     <div
       ref={popupRootRef}
-      className="w-80 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 text-slate-900 shadow-2xl ring-1 ring-slate-900/5 backdrop-blur"
+      className="w-80 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 font-sans text-slate-900 shadow-2xl ring-1 ring-slate-900/5 backdrop-blur"
     >
       <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -896,7 +896,7 @@ export default function ContentApp() {
             ) : null}
             <textarea
               ref={textareaRef}
-              className="w-full rounded-2xl border border-slate-300/80 bg-white px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+              className="w-full rounded-2xl border border-slate-300/80 bg-white px-2 py-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
               rows={4}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}

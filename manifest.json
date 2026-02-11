@@ -42,7 +42,7 @@
     "run-prompt-1": {
       "description": "Run prompt slot 01",
       "suggested_key": {
-        "default": "Ctrl+Shift+P"
+        "default": "Ctrl+Shift+E"
       }
     },
     "run-prompt-2": { "description": "Run prompt slot 02" },
