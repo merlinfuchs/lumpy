@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 type PromptConfig = {
   id: string;
@@ -191,14 +197,25 @@ export default function ContentApp() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const apiKeyRef = useRef<string>("");
 
-  const hidePopup = () => {
+  const hidePopup = useCallback(() => {
     setVisible(false);
     setMode("idle");
     setActivePrompt(null);
     setInputText("");
     setAnswer("");
     setError("");
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        hidePopup();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [visible, hidePopup]);
 
   useEffect(() => {
     chrome.storage.sync.get(["openRouterApiKey", "prompts"], (result) => {
@@ -290,7 +307,7 @@ export default function ContentApp() {
     // - promptMode === "select": only when nothing is selected
     setMode("awaiting_input");
     setInputText(useSelectionOnly ? "" : selected);
-    setTimeout(() => textareaRef.current?.focus(), 0);
+    setTimeout(() => textareaRef.current?.focus(), 100);
   };
 
   const runPrompt = async (
@@ -532,6 +549,15 @@ export default function ContentApp() {
               rows={4}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                if (e.shiftKey) return; // Shift+Enter inserts newline
+                e.preventDefault(); // Enter submits
+                if (!activePrompt) return;
+                const apiKey = apiKeyRef.current || settings.openRouterApiKey;
+                if (!inputText.trim()) return;
+                void runPrompt(activePrompt, inputText.trim(), apiKey);
+              }}
               placeholder="Type input to inject into {{input}}…"
             />
             <div className="flex items-center justify-end gap-2">
