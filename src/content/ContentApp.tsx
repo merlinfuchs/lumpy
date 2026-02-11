@@ -5,7 +5,8 @@ type PromptConfig = {
   model: string;
   template: string;
   compatMode: boolean;
-  stealthMode?: boolean;
+  promptMode: "prompt" | "select";
+  answerMode: "popup" | "clipboard" | "popup-clipboard";
   commandId?: string;
   keyboardShortcut?: string;
 };
@@ -16,6 +17,9 @@ type ExtensionSettings = {
 };
 
 const TEMPLATE_PLACEHOLDER = "{{input}}";
+
+const ANSWER_MODES = ["popup", "clipboard", "popup-clipboard"] as const;
+const PROMPT_MODES = ["prompt", "select"] as const;
 
 function normalizePrompt(value: unknown): PromptConfig | null {
   if (!value || typeof value !== "object") return null;
@@ -28,12 +32,30 @@ function normalizePrompt(value: unknown): PromptConfig | null {
   ) {
     return null;
   }
+  let promptMode: "prompt" | "select" = "prompt";
+  let answerMode: "popup" | "clipboard" | "popup-clipboard" = "popup";
+  if (
+    typeof v.answerMode === "string" &&
+    ANSWER_MODES.includes(v.answerMode as any)
+  ) {
+    answerMode = v.answerMode as "popup" | "clipboard" | "popup-clipboard";
+  } else if (v.stealthMode === true) {
+    answerMode = "clipboard";
+    promptMode = "select";
+  }
+  if (
+    typeof v.promptMode === "string" &&
+    PROMPT_MODES.includes(v.promptMode as any)
+  ) {
+    promptMode = v.promptMode as "prompt" | "select";
+  }
   return {
     id: v.id,
     model: v.model,
     template: v.template,
     compatMode: v.compatMode,
-    stealthMode: typeof v.stealthMode === "boolean" ? v.stealthMode : false,
+    promptMode,
+    answerMode,
     keyboardShortcut:
       typeof v.keyboardShortcut === "string" ? v.keyboardShortcut : "",
   };
@@ -222,26 +244,28 @@ export default function ContentApp() {
   }, []);
 
   const triggerPrompt = async (prompt: PromptConfig) => {
-    // Secret (clipboard) mode should leave no visible UI footprint.
-    if (prompt.stealthMode) {
-      hidePopup();
-      await runSecretCopyPrompt(prompt);
-      return;
-    }
+    const apiKey = apiKeyRef.current || settings.openRouterApiKey;
 
-    // Compatibility mode should leave no visible UI footprint.
+    // Compatibility mode: use browser alert/prompt only, no custom UI.
     if (prompt.compatMode) {
       hidePopup();
       await runCompatibilityPrompt(prompt);
       return;
     }
 
+    // Answer to clipboard only, no popup: run headless (with optional window.prompt for input when promptMode is 'prompt').
+    if (prompt.answerMode === "clipboard") {
+      hidePopup();
+      await runClipboardOnlyPrompt(prompt, apiKey);
+      return;
+    }
+
+    // Show custom popup for input and/or answer.
     setVisible(true);
     setActivePrompt(prompt);
     setAnswer("");
     setError("");
 
-    const apiKey = apiKeyRef.current || settings.openRouterApiKey;
     if (!apiKey.trim()) {
       setMode("error");
       setError(
@@ -253,15 +277,20 @@ export default function ContentApp() {
     if (runningRef.current) return;
 
     const selected = getSelectedText();
-    if (!selected) {
-      setMode("awaiting_input");
-      setInputText("");
-      // focus input next tick
-      setTimeout(() => textareaRef.current?.focus(), 0);
+    const useSelectionOnly = prompt.promptMode === "select";
+
+    if (useSelectionOnly && selected.trim()) {
+      // Use selection only (no input step).
+      await runPrompt(prompt, selected.trim(), apiKey);
       return;
     }
 
-    await runPrompt(prompt, selected, apiKey);
+    // Show input step:
+    // - promptMode === "prompt": always show (prefill with selection so users can add more)
+    // - promptMode === "select": only when nothing is selected
+    setMode("awaiting_input");
+    setInputText(useSelectionOnly ? "" : selected);
+    setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
   const runPrompt = async (
@@ -293,6 +322,9 @@ export default function ContentApp() {
       }
       setMode("done");
       setAnswer(res.text);
+      if (prompt.answerMode === "popup-clipboard") {
+        copyToClipboardBestEffort(res.text);
+      }
     } finally {
       runningRef.current = false;
     }
@@ -338,17 +370,36 @@ export default function ContentApp() {
     }
 
     const selected = getSelectedText();
-    const input =
-      selected ||
-      (window.prompt("Lumpy (Compatibility Mode): Enter input", "") ?? "");
-    if (!input.trim()) return;
+    let input: string;
+    if (prompt.promptMode === "select") {
+      if (selected.trim()) {
+        input = selected.trim();
+      } else {
+        const prompted =
+          window.prompt(
+            "Lumpy (Compatibility): No selection — enter input",
+            ""
+          ) ?? "";
+        if (!prompted.trim()) return;
+        input = prompted.trim();
+      }
+    } else {
+      // Always prompt: prefill with selection so user can add or edit (selection + additional input)
+      const prompted =
+        window.prompt(
+          "Lumpy (Compatibility): Enter or add to input",
+          selected || ""
+        ) ?? "";
+      if (!prompted.trim()) return;
+      input = prompted.trim();
+    }
 
     runningRef.current = true;
     try {
       const promptText = await buildPromptWithPdfContext({
         apiKey,
         template: prompt.template,
-        input: input.trim(),
+        input,
       });
       const res = await sendOpenRouterChat({
         apiKey,
@@ -361,8 +412,14 @@ export default function ContentApp() {
         return;
       }
 
-      window.alert(res.text);
-      copyToClipboardBestEffort(res.text);
+      const showPopup =
+        prompt.answerMode === "popup" ||
+        prompt.answerMode === "popup-clipboard";
+      const copyToClipboard =
+        prompt.answerMode === "clipboard" ||
+        prompt.answerMode === "popup-clipboard";
+      if (showPopup) window.alert(res.text);
+      if (copyToClipboard) copyToClipboardBestEffort(res.text);
     } catch (err) {
       window.alert(
         `Lumpy (Compatibility Mode) error: ${
@@ -374,24 +431,35 @@ export default function ContentApp() {
     }
   };
 
-  const runSecretCopyPrompt = async (prompt: PromptConfig) => {
+  const runClipboardOnlyPrompt = async (
+    prompt: PromptConfig,
+    apiKey: string
+  ) => {
     if (runningRef.current) return;
-    const apiKey = apiKeyRef.current || settings.openRouterApiKey;
-    if (!apiKey.trim()) {
-      // No UI in secret mode; fail silently.
-      return;
-    }
+    if (!apiKey.trim()) return;
 
     const selected = getSelectedText();
-    // Keep this mode discreet: if there's no selection, do nothing (no prompt UI).
-    if (!selected.trim()) return;
+    let input: string;
+    if (prompt.promptMode === "select") {
+      if (!selected.trim()) return;
+      input = selected.trim();
+    } else {
+      // Always prompt: prefill with selection so user can add or edit (selection + additional input)
+      const prompted =
+        window.prompt(
+          "Lumpy: Enter or add to input (clipboard-only mode)",
+          selected || ""
+        ) ?? "";
+      if (!prompted.trim()) return;
+      input = prompted.trim();
+    }
 
     runningRef.current = true;
     try {
       const promptText = await buildPromptWithPdfContext({
         apiKey,
         template: prompt.template,
-        input: selected.trim(),
+        input,
       });
       const res = await sendOpenRouterChat({
         apiKey,
@@ -454,7 +522,9 @@ export default function ContentApp() {
         {mode === "awaiting_input" ? (
           <div className="space-y-2">
             <div className="text-xs text-slate-700">
-              No text selected — enter input:
+              {inputText.trim()
+                ? "Selection + additional input (edit as needed):"
+                : "No text selected — enter input:"}
             </div>
             <textarea
               ref={textareaRef}

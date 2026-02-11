@@ -6,9 +6,12 @@ export interface PromptConfig {
   id: string;
   model: string;
   template: string;
+  // Compatibility mode: use standard browser popups (alert, prompt) instead of custom one
   compatMode: boolean;
-  // Stealth mode: copy output to clipboard and avoid showing UI.
-  stealthMode?: boolean;
+  // Whether to always prompt for additional input or only use selected text and fallback to prompt when no text is selected
+  promptMode: "prompt" | "select";
+  // Whether to show the answer in a popup, copy to clipboard, or both
+  answerMode: "popup" | "clipboard" | "popup-clipboard";
   // Command slot this prompt is bound to (e.g. "run-prompt-1")
   commandId?: string;
   // Legacy: previously used for on-page key listeners; no longer used.
@@ -35,7 +38,8 @@ const DEFAULT_SETTINGS: ExtensionSettingsV2 = {
         "User input:\n{{input}}\n\n" +
         "Response:",
       compatMode: false,
-      stealthMode: false,
+      promptMode: "prompt",
+      answerMode: "popup",
       commandId: "run-prompt-1",
     },
   ],
@@ -163,6 +167,9 @@ function makeId(): string {
     .slice(2, 10)}`;
 }
 
+const PROMPT_MODES = ["prompt", "select"] as const;
+const ANSWER_MODES = ["popup", "clipboard", "popup-clipboard"] as const;
+
 function normalizePrompt(value: unknown): PromptConfig | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
@@ -175,12 +182,26 @@ function normalizePrompt(value: unknown): PromptConfig | null {
     return null;
   }
 
+  // Migrate legacy stealthMode to answerMode + promptMode
+  let promptMode: "prompt" | "select" = "prompt";
+  let answerMode: "popup" | "clipboard" | "popup-clipboard" = "popup";
+  if (typeof v.answerMode === "string" && ANSWER_MODES.includes(v.answerMode as any)) {
+    answerMode = v.answerMode as "popup" | "clipboard" | "popup-clipboard";
+  } else if (v.stealthMode === true) {
+    answerMode = "clipboard";
+    promptMode = "select";
+  }
+  if (typeof v.promptMode === "string" && PROMPT_MODES.includes(v.promptMode as any)) {
+    promptMode = v.promptMode as "prompt" | "select";
+  }
+
   return {
     id: v.id,
     model: v.model,
     template: v.template,
     compatMode: v.compatMode,
-    stealthMode: typeof v.stealthMode === "boolean" ? v.stealthMode : false,
+    promptMode,
+    answerMode,
     commandId: typeof v.commandId === "string" ? v.commandId : undefined,
     keyboardShortcut:
       typeof v.keyboardShortcut === "string" ? v.keyboardShortcut : undefined,
@@ -384,7 +405,8 @@ export default function OptionsApp() {
         `User input:\n${TEMPLATE_PLACEHOLDER}\n\n` +
         "Response:",
       compatMode: false,
-      stealthMode: false,
+      promptMode: "prompt",
+      answerMode: "popup",
       keyboardShortcut: "",
     };
     updateSettings({ ...settings, prompts: [...settings.prompts, next] });
@@ -741,61 +763,79 @@ export default function OptionsApp() {
                       </div>
 
                       <div className="rounded-2xl border border-slate-200/70 bg-white/60 px-3 py-3 ring-1 ring-slate-900/5">
-                        <div className="flex items-center gap-2">
-                          <input
-                            id={`compat-${prompt.id}`}
-                            type="checkbox"
-                            checked={prompt.compatMode}
-                            onChange={(e) => {
-                              const checked = e.target.checked;
-                              updatePrompt(prompt.id, {
-                                compatMode: checked,
-                                // Keep modes mutually exclusive for clarity.
-                                stealthMode: checked
-                                  ? false
-                                  : prompt.stealthMode,
-                              });
-                            }}
-                          />
+                        <div>
                           <label
-                            className="text-sm font-semibold text-slate-900"
-                            htmlFor={`compat-${prompt.id}`}
+                            className="mb-2 block text-sm font-semibold text-slate-900"
+                            htmlFor={`promptMode-${prompt.id}`}
                           >
-                            Compatibility Mode
+                            When to ask for input
                           </label>
-                        </div>
-                        <div className="mt-2 text-xs text-slate-600">
-                          Uses the browser’s standard popup dialogs instead of
-                          the custom on-page Lumpy popup.
+                          <select
+                            id={`promptMode-${prompt.id}`}
+                            className="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                            value={prompt.promptMode}
+                            onChange={(e) =>
+                              updatePrompt(prompt.id, {
+                                promptMode: e.target.value as "prompt" | "select",
+                              })
+                            }
+                          >
+                            <option value="prompt">Always prompt for additional input</option>
+                            <option value="select">Only use selected text; prompt only when nothing is selected</option>
+                          </select>
+                          <div className="mt-2 text-xs text-slate-600">
+                            Controls whether you always see an input step or only when no text is selected.
+                          </div>
                         </div>
 
-                        <div className="mt-3 border-t border-slate-200/70 pt-3">
+                        <div className="border-t border-slate-200/70 pt-3">
+                          <label
+                            className="mb-2 block text-sm font-semibold text-slate-900"
+                            htmlFor={`answerMode-${prompt.id}`}
+                          >
+                            Where to show the answer
+                          </label>
+                          <select
+                            id={`answerMode-${prompt.id}`}
+                            className="w-full rounded-xl border border-slate-300/80 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+                            value={prompt.answerMode}
+                            onChange={(e) =>
+                              updatePrompt(prompt.id, {
+                                answerMode: e.target.value as "popup" | "clipboard" | "popup-clipboard",
+                              })
+                            }
+                          >
+                            <option value="popup">Show in popup</option>
+                            <option value="clipboard">Copy to clipboard only</option>
+                            <option value="popup-clipboard">Popup and clipboard</option>
+                          </select>
+                          <div className="mt-2 text-xs text-slate-600">
+                            Popup shows the answer in the Lumpy UI; clipboard-only runs without showing the popup.
+                          </div>
+                        </div>
+
+                        <div className="border-t border-slate-200/70 pt-3">
                           <div className="flex items-center gap-2">
                             <input
-                              id={`secretcopy-${prompt.id}`}
+                              id={`compat-${prompt.id}`}
                               type="checkbox"
-                              checked={Boolean(prompt.stealthMode)}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
+                              checked={prompt.compatMode}
+                              onChange={(e) =>
                                 updatePrompt(prompt.id, {
-                                  stealthMode: checked,
-                                  // Keep modes mutually exclusive for clarity.
-                                  compatMode: checked
-                                    ? false
-                                    : prompt.compatMode,
-                                });
-                              }}
+                                  compatMode: e.target.checked,
+                                })
+                              }
                             />
                             <label
                               className="text-sm font-semibold text-slate-900"
-                              htmlFor={`secretcopy-${prompt.id}`}
+                              htmlFor={`compat-${prompt.id}`}
                             >
-                              Secret (Copy to clipboard)
+                              Compatibility mode
                             </label>
                           </div>
                           <div className="mt-2 text-xs text-slate-600">
-                            Runs without showing any UI and copies the answer to
-                            your clipboard (more discreet).
+                            Use standard browser popups (alert, prompt) instead of
+                            the custom on-page Lumpy popup.
                           </div>
                         </div>
                       </div>

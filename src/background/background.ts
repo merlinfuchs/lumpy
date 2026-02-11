@@ -36,9 +36,13 @@ type StoredPrompt = {
   model: string;
   template: string;
   compatMode: boolean;
-  stealthMode?: boolean;
+  promptMode: "prompt" | "select";
+  answerMode: "popup" | "clipboard" | "popup-clipboard";
   commandId?: string;
 };
+
+const ANSWER_MODES = ["popup", "clipboard", "popup-clipboard"] as const;
+const PROMPT_MODES = ["prompt", "select"] as const;
 
 function normalizeStoredPrompt(value: unknown): StoredPrompt | null {
   if (!value || typeof value !== "object") return null;
@@ -51,12 +55,24 @@ function normalizeStoredPrompt(value: unknown): StoredPrompt | null {
   ) {
     return null;
   }
+  let promptMode: "prompt" | "select" = "prompt";
+  let answerMode: "popup" | "clipboard" | "popup-clipboard" = "popup";
+  if (typeof v.answerMode === "string" && ANSWER_MODES.includes(v.answerMode as any)) {
+    answerMode = v.answerMode as "popup" | "clipboard" | "popup-clipboard";
+  } else if (v.stealthMode === true) {
+    answerMode = "clipboard";
+    promptMode = "select";
+  }
+  if (typeof v.promptMode === "string" && PROMPT_MODES.includes(v.promptMode as any)) {
+    promptMode = v.promptMode as "prompt" | "select";
+  }
   return {
     id: v.id,
     model: v.model,
     template: v.template,
     compatMode: v.compatMode,
-    stealthMode: typeof v.stealthMode === "boolean" ? v.stealthMode : false,
+    promptMode,
+    answerMode,
     commandId: typeof v.commandId === "string" ? v.commandId : undefined,
   };
 }
