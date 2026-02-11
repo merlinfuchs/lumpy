@@ -196,6 +196,9 @@ export default function ContentApp() {
   const runningRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const apiKeyRef = useRef<string>("");
+  const lastRunPromptMsgRef = useRef<{ promptId: string; at: number } | null>(
+    null
+  );
 
   const hidePopup = useCallback(() => {
     setVisible(false);
@@ -254,6 +257,18 @@ export default function ContentApp() {
       setSettings((prev) =>
         apiKey ? { ...prev, openRouterApiKey: apiKey } : prev
       );
+      // Background may retry RUN_PROMPT shortly after the first send.
+      // If the popup steals focus, selection can disappear; de-dupe prevents
+      // the second message from wiping prefilled selection text.
+      if (prompt?.id) {
+        const now = Date.now();
+        const last = lastRunPromptMsgRef.current;
+        if (last && last.promptId === prompt.id && now - last.at < 400) {
+          return;
+        }
+        lastRunPromptMsgRef.current = { promptId: prompt.id, at: now };
+      }
+
       if (prompt) {
         void triggerPrompt(prompt);
       }
