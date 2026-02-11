@@ -40,6 +40,7 @@ Lumpy is a fun, lightweight browser extension that helps you understand what you
 - Click on the extension icon in the toolbar and add your **OpenRouter API key**
 - Assign prompt slots to commands, then set keyboard shortcuts in:
   - Chrome: `chrome://extensions/shortcuts`
+  - Firefox: `about:addons` -> Gear icon -> Manage Extension Shortcuts
 - On any webpage:
   - Select some text
   - Run your configured shortcut

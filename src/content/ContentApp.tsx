@@ -25,7 +25,12 @@ type ExtensionSettings = {
 const TEMPLATE_PLACEHOLDER = "{{input}}";
 
 const ANSWER_MODES = ["popup", "clipboard", "popup-clipboard"] as const;
-const PROMPT_MODES = ["select-prompt", "select", "area-prompt", "area"] as const;
+const PROMPT_MODES = [
+  "select-prompt",
+  "select",
+  "area-prompt",
+  "area",
+] as const;
 
 function normalizePrompt(value: unknown): PromptConfig | null {
   if (!value || typeof value !== "object") return null;
@@ -342,6 +347,7 @@ export default function ContentApp() {
   const [areaImageDataUrl, setAreaImageDataUrl] = useState<string | null>(null);
 
   const runningRef = useRef(false);
+  const popupRootRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const apiKeyRef = useRef<string>("");
   const lastRunPromptMsgRef = useRef<{ promptId: string; at: number } | null>(
@@ -360,13 +366,40 @@ export default function ContentApp() {
 
   useEffect(() => {
     if (!visible) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        hidePopup();
-      }
+    const shouldBlock = (e: KeyboardEvent) => {
+      const root = popupRootRef.current;
+      const target = e.target as Node | null;
+      return Boolean(root && target && root.contains(target));
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+
+    // Capture-phase key handler so page hotkeys can't steal focus
+    // (e.g. DuckDuckGo's single-letter shortcuts).
+    const onKeyDownCapture = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        // Let Escape close the popup, and don't let the page see it.
+        e.preventDefault();
+        (e as any).stopImmediatePropagation?.();
+        e.stopPropagation();
+        hidePopup();
+        return;
+      }
+      if (!shouldBlock(e)) return;
+      (e as any).stopImmediatePropagation?.();
+      e.stopPropagation();
+    };
+
+    const onKeyUpCapture = (e: KeyboardEvent) => {
+      if (!shouldBlock(e)) return;
+      (e as any).stopImmediatePropagation?.();
+      e.stopPropagation();
+    };
+
+    window.addEventListener("keydown", onKeyDownCapture, true);
+    window.addEventListener("keyup", onKeyUpCapture, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDownCapture, true);
+      window.removeEventListener("keyup", onKeyUpCapture, true);
+    };
   }, [visible, hidePopup]);
 
   useEffect(() => {
@@ -548,7 +581,8 @@ export default function ContentApp() {
       const promptText = await buildPromptWithPdfContext({
         apiKey,
         template: prompt.template,
-        input: input.trim() || (opts?.imageDataUrl ? "Screenshot attached." : ""),
+        input:
+          input.trim() || (opts?.imageDataUrl ? "Screenshot attached." : ""),
       });
       const res = await sendOpenRouterChat({
         apiKey,
@@ -645,7 +679,8 @@ export default function ContentApp() {
         }
 
         const showPopup =
-          prompt.answerMode === "popup" || prompt.answerMode === "popup-clipboard";
+          prompt.answerMode === "popup" ||
+          prompt.answerMode === "popup-clipboard";
         const copyToClipboard =
           prompt.answerMode === "clipboard" ||
           prompt.answerMode === "popup-clipboard";
@@ -795,7 +830,10 @@ export default function ContentApp() {
   if (!visible) return null;
 
   return (
-    <div className="w-80 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 text-slate-900 shadow-2xl ring-1 ring-slate-900/5 backdrop-blur">
+    <div
+      ref={popupRootRef}
+      className="w-80 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/80 text-slate-900 shadow-2xl ring-1 ring-slate-900/5 backdrop-blur"
+    >
       <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <img
@@ -844,8 +882,8 @@ export default function ContentApp() {
               {areaImageDataUrl
                 ? "Screenshot selected — add context (optional):"
                 : inputText.trim()
-                  ? "Selection + additional input (edit as needed):"
-                  : "No text selected — enter input:"}
+                ? "Selection + additional input (edit as needed):"
+                : "No text selected — enter input:"}
             </div>
             {areaImageDataUrl ? (
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
@@ -863,6 +901,11 @@ export default function ContentApp() {
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => {
+                // Prevent page-level hotkeys (e.g. DDG single-letter shortcuts)
+                // from seeing keystrokes while typing in the popup.
+                e.stopPropagation();
+                (e.nativeEvent as any).stopImmediatePropagation?.();
+
                 if (e.key !== "Enter") return;
                 if (e.shiftKey) return; // Shift+Enter inserts newline
                 e.preventDefault(); // Enter submits
@@ -872,6 +915,10 @@ export default function ContentApp() {
                 void runPrompt(activePrompt, inputText.trim(), apiKey, {
                   imageDataUrl: areaImageDataUrl ?? undefined,
                 });
+              }}
+              onKeyUp={(e) => {
+                e.stopPropagation();
+                (e.nativeEvent as any).stopImmediatePropagation?.();
               }}
               placeholder="Type input to inject into {{input}}…"
             />
@@ -886,7 +933,9 @@ export default function ContentApp() {
               <button
                 type="button"
                 className="rounded-full bg-gradient-to-r from-fuchsia-600 via-purple-600 to-indigo-600 px-3 py-2 text-xs font-extrabold text-white shadow-sm ring-1 ring-black/5 hover:from-fuchsia-500 hover:via-purple-500 hover:to-indigo-500 disabled:opacity-50"
-                disabled={!activePrompt || (!inputText.trim() && !areaImageDataUrl)}
+                disabled={
+                  !activePrompt || (!inputText.trim() && !areaImageDataUrl)
+                }
                 onClick={() => {
                   if (!activePrompt) return;
                   const apiKey = apiKeyRef.current || settings.openRouterApiKey;
